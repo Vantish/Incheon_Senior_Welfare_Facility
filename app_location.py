@@ -1,8 +1,6 @@
 import streamlit as st
-
-def around_leisure_restaurant():
-    pass
+from app_around_leisure_restaurant import around_leisure_restaurant
 
 
 def run_location():
-    pass
+    around_leisure_restaurant()
