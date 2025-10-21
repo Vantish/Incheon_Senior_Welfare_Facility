@@ -16,9 +16,9 @@ def main():
     if menu_select == menu_list[0]:
         run_home()
     elif menu_select == menu_list[1]:
-        run_map()
-    elif menu_select == menu_list[2]:
         run_location()
+    elif menu_select == menu_list[2]:
+        run_map()
 
 
 
