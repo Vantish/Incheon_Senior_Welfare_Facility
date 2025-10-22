@@ -2,6 +2,11 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 
+from app_bus_stop_recommendation import bus_stop_recommendation
 
-def check_bus_route():
-    pass
+# bus_stop_recommendation() 에서 반환받은 정류장 리스트를 이용해서
+# 해당 정류장을 지나가는 노선을 찾을겁니다.
+# 찾은 후 '정류장 명' : 버스번호 형식의 딕셔너리로 반환할 예정입니다.
+
+def check_bus_route(bus_dic):
+    return

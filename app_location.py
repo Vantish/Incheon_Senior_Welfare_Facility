@@ -1,6 +1,11 @@
 import streamlit as st
-from app_around_leisure_restaurant import around_leisure_restaurant
+
+# 이 부분의 기능은 사용자의 위치를 찍는 부분입니다.
+# 도로명 주소를 입력하면 지도에 해당 위치가 표시되는 기능을 구현할 예정입니다.
+# 또한 사용자가 이용하고 싶은 시설의 분류 역시도 선택합니다.
+# 입력한 값을 리턴값으로 넣어서 메인에서 받습니다.
 
 
 def run_location():
-    around_leisure_restaurant()
+    # 해당 부분에 사용자의 위도, 경도, 도로명 주소, 이용하고싶은 시설 분류가 담긴 데이터프레임을 반환
+    return 

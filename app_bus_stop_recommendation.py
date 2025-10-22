@@ -2,12 +2,10 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 
-from app_bus_route import check_bus_route
+# 기존에는 버스 정보를 받아서 정류장을 찾는 형태였는데
+# 반대가 더 합리적일거 같다는 생각이 들었습니다.
+# 그래서 여기 부분에서는 사용자 근처 가장 가까운 정류장 5개와
+# 시설에서 가장 가까운 정류장 5개를 딕셔너리 형태로 반환할 예정입니다.
 
-
-def bus_stop_recommendation():
-    bus_list = check_bus_route()
-    if bus_list is not None:
-        pass
-    else:
-        pass
+def bus_stop_recommendation(user_location):
+    return
