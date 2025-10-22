@@ -20,17 +20,19 @@ def run_map(user_location = None):
     if user_location == None:
         st.error('사용자의 위치가 지정되지 않았습니다. 다시 지정해주세요.')
     else:
+        facilities_location = 0
+
+
         select_list = ['맛집', '여가시설', '정류장']
         selection = st.multiselect('추가적으로 사용하실 정보를 입력해주세요.', select_list)
         if select_list[0] in selection:
-            temp_restaurant = around_restaurant(user_location)
+            temp_restaurant = around_restaurant(facilities_location)
             pass
         if select_list[1] in selection:
-            temp_leisure = around_leisure(user_location)
+            temp_leisure = around_leisure(facilities_location)
             pass
         if select_list[2] in selection:
-            temp_bus_stop = bus_stop_recommendation(user_location)
-
+            temp_bus_stop = bus_stop_recommendation(user_location, facilities_location)
             temp_bus = check_bus_route(temp_bus_stop)
             
             pass
