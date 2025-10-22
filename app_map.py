@@ -30,6 +30,8 @@ def run_map(user_location = None):
             pass
         if select_list[2] in selection:
             temp_bus_stop = bus_stop_recommendation(user_location)
+
             temp_bus = check_bus_route(temp_bus_stop)
+            
             pass
     
