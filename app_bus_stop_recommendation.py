@@ -4,7 +4,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import folium
 from sklearn.neighbors import NearestNeighbors
-from streamlit_folium import st_folium
 
 
 # 기존에는 버스 정보를 받아서 정류장을 찾는 형태였는데
