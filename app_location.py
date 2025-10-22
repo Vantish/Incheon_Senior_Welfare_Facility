@@ -8,4 +8,11 @@ import streamlit as st
 
 def run_location():
     # 해당 부분에 사용자의 위도, 경도, 도로명 주소, 이용하고싶은 시설 분류가 담긴 데이터프레임을 반환
-    return 
+
+    # temp위도 = st.number_input('위도', format="%.7f")
+    # temp경도 = st.number_input('경도', format="%.7f")
+    # temp도로명 = st.text_input('도로명')
+    # temp시설유형 = st.text_input('시설유형')
+    
+    # lis = [temp위도, temp경도, temp도로명, temp시설유형]
+    return #lis

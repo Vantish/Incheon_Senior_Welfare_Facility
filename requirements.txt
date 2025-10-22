@@ -1,0 +1,7 @@
+streamlit
+pandas
+numpy
+folium
+# optional for road-based routing (can be omitted to use straight-line fallback)
+osmnx
+networkx
