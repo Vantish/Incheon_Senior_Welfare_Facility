@@ -9,4 +9,9 @@ from app_bus_stop_recommendation import bus_stop_recommendation
 # 찾은 후 '정류장 명' : 버스번호 형식의 딕셔너리로 반환할 예정입니다.
 
 def check_bus_route(bus_dic):
-    return
+    # 안전한 noop 반환 (사용자/시설 정류장 목록을 그대로 키로 돌려주는 최소 스펙)
+    if bus_dic is None:
+        return {}
+    if isinstance(bus_dic, dict):
+        return {k: (v['정류장명'].astype(str).tolist() if hasattr(v, 'columns') and '정류장명' in v.columns else []) for k, v in bus_dic.items()}
+    return {}
