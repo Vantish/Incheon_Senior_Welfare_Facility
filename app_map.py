@@ -3,7 +3,7 @@ from app_bus_stop_recommendation import bus_stop_recommendation
 from app_bus_route import check_bus_route
 from app_around_leisure_restaurant import around_leisure
 from app_around_leisure_restaurant import around_restaurant
-# app_location.run_location()는 app_main에서 호출되어 그 결과를 전달받는다고 가정합니다.
+from app_location import run_location
 
 import numpy as np
 import pandas as pd
@@ -32,13 +32,14 @@ GRAPH_CACHE_PATH = './incheon_graph.pkl'
 # 이후 각각의 부분에서 받아온 함수를 상황에 맞게 동작시켜서 정보를 받은 후, 해당 정보를 출력합니다.
 
 
-def run_map(user_location = None):
+def run_map():
     st.subheader('위치 기반 추천')
     st.text('\n')
-    # user_location은 app_main에서 전달된 리스트 형태를 기대합니다:
+    user_location = run_location()
+    # user_location은 리스트 형태를 기대합니다:
     # [위도, 경도, 도로명 주소, 이용하고 싶은 시설 분류]
     if user_location is None:
-        st.error('사용자의 위치가 지정되지 않았습니다. app_location 또는 app_main에서 위치 정보를 전달해주세요.')
+        st.error('사용자의 위치가 지정되지 않았습니다. app_location 에서 위치 정보를 전달해주세요.')
         return
     else:
         # 읽어오기 (euc-kr 인코딩)
