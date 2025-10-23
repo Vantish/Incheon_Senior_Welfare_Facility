@@ -3,10 +3,23 @@ import time
 import requests
 import xml.etree.ElementTree as ET
 from html import unescape
+import streamlit as st
 
-# 기본 API 키: 환경변수 'INCHEON_BUS_API_KEY' 우선, 없으면 아래 DEFAULT_API_KEY 사용
-# 사용자가 제공한 키를 기본으로 설정했습니다. 필요하면 환경변수로 바꾸세요.
-DEFAULT_API_KEY = os.environ.get('INCHEON_BUS_API_KEY', 'cfc1fb1a7c7efb33b478866cab3f24acd77e08fc0c31a77f552df93a9ce4dc0b')
+# API 키 소스 우선순위:
+# 1) Streamlit secrets (st.secrets['INCHEON_BUS_API_KEY'])
+# 2) 환경변수 INCHEON_BUS_API_KEY
+# 3) 하드코딩된 DEFAULT (개발용; 실제 운영시에는 secrets 사용 권장)
+DEFAULT_API_KEY = os.environ.get('INCHEON_BUS_API_KEY', None)
+
+
+def _get_api_key_from_secrets():
+    try:
+        # Streamlit의 secrets를 사용(주로 배포환경에서 사용)
+        if hasattr(st, 'secrets') and isinstance(st.secrets, dict) and 'INCHEON_BUS_API_KEY' in st.secrets:
+            return st.secrets['INCHEON_BUS_API_KEY']
+    except Exception:
+        pass
+    return None
 
 
 def _extract_routes_from_json(obj, collector):
@@ -76,7 +89,8 @@ def check_bus_route(bus_dic, api_key=None):
     if bus_dic is None:
         return {}
 
-    key = api_key or DEFAULT_API_KEY
+    # 우선 st.secrets에 API 키가 있으면 사용, 없으면 인자로 준 키, 그 다음 환경변수/DEFAULT 사용
+    key = api_key or _get_api_key_from_secrets() or DEFAULT_API_KEY
 
     # 수집 결과 포맷
     out = {'user': {}, 'facility': {}}
