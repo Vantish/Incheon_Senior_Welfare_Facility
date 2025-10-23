@@ -37,11 +37,15 @@ def run_location():
         else:
             return None, None
 
-    # 먼저 시설 유형 선택 UI는 항상 노출
-    facility_types = df['시설유형'].dropna().unique()
-    selected_type = st.selectbox('시설유형을 선택하세요', facility_types)
-    st.write(f"선택한 시설유형: {selected_type}")
-
+# 2. 주소가 입력된 경우에만 시설유형 선택 UI 표시
+    if address:
+        facility_types = df['시설유형'].dropna().unique()
+        selected_type = st.selectbox('시설유형을 선택하세요', facility_types)
+    else:
+        st.write('주소를 입력해주세요')
+    
+    
+   
     # 주소가 비어 있으면 None 반환 (app_map에서 체크)
     if not address:
         st.info('주소를 입력하면 해당 위치를 찾아 추천을 제공합니다.')
@@ -54,11 +58,13 @@ def run_location():
         st.error("주소를 찾을 수 없습니다.")
         return None
 
-    # 성공적으로 찾은 경우 위도/경도 표시 후 반환
-    st.success(f"위도: {lat}, 경도: {lon}")
+
 
     lis = [lat, lon, address, selected_type]  # 위도, 경도, 주소, 선택한 시설유형
-    return lis
+    if st.button('입력'):
+        return lis
+
+ 
 
 
 
