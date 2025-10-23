@@ -43,7 +43,7 @@ def run_map():
         return
     else:
         # 읽어오기 (euc-kr 인코딩)
-        노인복지시설_df = pd.read_csv('./data/인천광역시_노인복지시설 현황.csv', encoding = 'euc-kr')
+        노인복지시설_df = pd.read_csv('./data/인천광역시_노인복지시설_현황.csv', encoding = 'euc-kr')
         st.write('데이터프레임 상위 5개')
         st.dataframe(노인복지시설_df.head())
 
