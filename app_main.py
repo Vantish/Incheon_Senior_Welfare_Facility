@@ -3,6 +3,7 @@ from app_home import run_home
 from app_map import run_map
 from app_location import run_location
 
+
 # 메인에서는 각 함수를 돌립니다.
 # 이때 app_location 부분에서 받아온 사용자 정보를 다음 세션으로 넘기기 위해
 # st.session_state 를 사용하여 전역변수처럼 저장합니다.
