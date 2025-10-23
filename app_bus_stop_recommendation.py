@@ -3,7 +3,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import folium
-from sklearn.neighbors import NearestNeighbors
+from folium.plugins import MarkerCluster
+from geopy.distance import geodesic
+from streamlit_folium import st_folium
 
 
 # 기존에는 버스 정보를 받아서 정류장을 찾는 형태였는데
@@ -12,6 +14,8 @@ from sklearn.neighbors import NearestNeighbors
 # 해당 정보를 바탕으로 계산된 시설의 위치정보(facilities_location)를 입력받은 후
 # 사용자 근처 가장 가까운 정류장 5개와 시설에서 가장 가까운 정류장 5개를 딕셔너리 형태로 반환합니다.
 
-def bus_stop_recommendation(user_location, facilities_location):
-    return
+bus_stops = pd.read_csv('./data/버스정류장.csv')
+facilities = pd.read_csv('./data/인천광역시_노인복지시설 현황.csv')
 
+def bus_stop_recommendation(user_location, selected_facility,stops_df=bus_stops, n=5 ):
+    pass

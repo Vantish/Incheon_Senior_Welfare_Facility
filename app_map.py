@@ -17,7 +17,7 @@ def run_map(user_location = None):
     st.subheader('위치 기반 추천')
     st.text('\n')
 
-    if user_location == None:
+    if user_location != None:
         st.error('사용자의 위치가 지정되지 않았습니다. 다시 지정해주세요.')
     else:
         facilities_location = 0
