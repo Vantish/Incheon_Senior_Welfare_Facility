@@ -30,28 +30,34 @@ def run_location():
         }
         headers = {"User-Agent": "MyApp/1.0 (your_email@example.com)"}
         response = requests.get(url, params=params,headers=headers)
+       
         if response.status_code == 200 and response.json():
             result = response.json()[0]
             return float(result["lat"]), float(result["lon"])
         else:
             return None, None
 
-    lat, lon = None, None
-
-    if address:
-        lat, lon = get_lat_lon(address)
-    
-    if lat is not None and lon is not None:
-        st.success(f"위도: {lat}, 경도: {lon}")
-    else:
-        if address:  # 주소가 입력된 경우에만 오류 출력
-            st.error("주소를 찾을 수 없습니다.")
-    
-    facility_types = df['시설유형'].unique()
+    # 먼저 시설 유형 선택 UI는 항상 노출
+    facility_types = df['시설유형'].dropna().unique()
     selected_type = st.selectbox('시설유형을 선택하세요', facility_types)
     st.write(f"선택한 시설유형: {selected_type}")
 
-    lis = [lat, lon, address, selected_type]  # 반환할 리스트
+    # 주소가 비어 있으면 None 반환 (app_map에서 체크)
+    if not address:
+        st.info('주소를 입력하면 해당 위치를 찾아 추천을 제공합니다.')
+        return None
+
+    lat, lon = get_lat_lon(address)
+
+    # 지오코딩 실패 시 None 반환
+    if lat is None or lon is None:
+        st.error("주소를 찾을 수 없습니다.")
+        return None
+
+    # 성공적으로 찾은 경우 위도/경도 표시 후 반환
+    st.success(f"위도: {lat}, 경도: {lon}")
+
+    lis = [lat, lon, address, selected_type]  # 위도, 경도, 주소, 선택한 시설유형
     return lis
 
 
