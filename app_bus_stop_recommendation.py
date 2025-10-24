@@ -17,12 +17,6 @@ bus_stops_df = pd.read_csv('./data/버스정류장.csv')
 
 def bus_stop_recommendation(user_location, facilities_location):
 
-    if user_location :
-        lat =user_location[0]
-        lon = user_location[1]
-    else : 
-        return None
-    
     
 
     return
