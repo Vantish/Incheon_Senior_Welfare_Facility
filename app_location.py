@@ -26,9 +26,11 @@ def run_location():
             "q": address,
             "format": "json",
             "limit": 1,
-            "addressdetails": 0,
-        }
-        headers = {"User-Agent": "MyApp/1.0 (your_email@example.com)"}
+            "addressdetails": 1,
+            "countrycodes": "kr",
+
+                                    }        
+        headers = {"User-Agent": "MyApp/1.0 (trushanshion@gmail.com)"}
         response = requests.get(url, params=params,headers=headers)
        
         if response.status_code == 200 and response.json():
