@@ -8,9 +8,6 @@ from app_map import run_map
 
 
 def main():
-    st.markdown(
-    "<h1 style='text-align: center;'>인천광역시 노인복지시설<br>위치기반 추천 앱</h1>",
-    unsafe_allow_html=True)
 
     menu_list = ['홈', '위치 작성']
     menu_select = st.sidebar.selectbox('메뉴', menu_list)
