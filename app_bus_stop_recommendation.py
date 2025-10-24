@@ -19,6 +19,21 @@ from app_location import run_location
 bus_stops_df = pd.read_csv('./data/버스정류장.csv')
 
 def bus_stop_recommendation(user_location, facilities_location):
+    user_location = run_location()
+     
+
+
+
+
+
+
+
+
+
+
+
+
+
     return
 
    
