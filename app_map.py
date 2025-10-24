@@ -39,13 +39,12 @@ def run_map():
     # user_location은 리스트 형태를 기대합니다:
     # [위도, 경도, 도로명 주소, 이용하고 싶은 시설 분류]
     if user_location is None:
-        st.error('사용자의 위치가 지정되지 않았습니다. app_location 에서 위치 정보를 전달해주세요.')
+        st.error('사용자의 위치가 지정되지 않았습니다.')
         return
     else:
         # 읽어오기 (euc-kr 인코딩)
         노인복지시설_df = pd.read_csv('./data/인천광역시_노인복지시설_현황.csv', encoding = 'euc-kr')
-        st.write('데이터프레임 상위 5개')
-        st.dataframe(노인복지시설_df[노인복지시설_df['시설유형'] == user_location[3]].head())
+
 
         # lat/lon 컬럼 인식 (파일 구조에 따라 컬럼명이 'lat','lon' 등으로 되어 있음)
         cols = [c for c in 노인복지시설_df.columns]
@@ -166,6 +165,10 @@ def run_map():
         # 최종 최소 행 선택
         best = road_results.nsmallest(1, 'road_dist_m').iloc[0]
 
+        best5 = road_results.nsmallest(5, 'road_dist_m')
+        st.write('데이터프레임 상위 5개')
+        st.dataframe(best5)
+
         # folium map 생성
         fmap = folium.Map(location=[ulat, ulon], zoom_start=14)
         # popup을 HTML로 만들어 가로 표시와 자동 줄바꿈을 적용
@@ -186,18 +189,60 @@ def run_map():
         best_title = str(best.get(type_col, '시설')) + '<br>' + str(best.get(노인복지시설_df.columns[0], '이름'))
         folium.Marker([best[lat_col], best[lon_col]], popup=make_popup(best_title), icon=folium.Icon(color='red')).add_to(fmap)
 
-        # 경로 polyline (osmnx 사용 시)
-        if use_road:
+        # 경로 polyline: 우선 도로(graph) 기반으로 그리되, 그래프나 노드가 없으면 직선으로 fallback
+        route_drawn = False
+        if use_road and G is not None and 'user_node' in locals():
             try:
                 # 경로 노드들 가져와서 선으로 그림
                 target_node = ox.nearest_nodes(G, best[lon_col], best[lat_col])
                 route = nx.shortest_path(G, user_node, target_node, weight='length')
-                route_geom = ox.plot_route_folium(G, route, route_map=fmap, color='green')
-            except Exception:
-                pass
-        else:
-            # 직선으로 연결
-            folium.PolyLine(locations=[[ulat, ulon], [best[lat_col], best[lon_col]]], color='green').add_to(fmap)
+
+                # 최신 osmnx 버전에서는 plot_route_folium이 제공되지 않을 수 있으므로
+                # 노드 좌표를 직접 추출해 folium PolyLine으로 그립니다.
+                try:
+                    coords = [(float(G.nodes[n]['y']), float(G.nodes[n]['x'])) for n in route]
+                    folium.PolyLine(locations=coords, color='green', weight=4, opacity=0.8).add_to(fmap)
+                    route_drawn = True
+                except Exception:
+                    # 노드에 x/y가 없거나 다른 포맷인 경우, edge geometry를 시도
+                    try:
+                        edge_geoms = []
+                        for u, v in zip(route[:-1], route[1:]):
+                            data = G.get_edge_data(u, v)
+                            if data is None:
+                                continue
+                            # 여러 에지 중 첫번째의 geometry 속성을 사용
+                            first = next(iter(data.values()))
+                            geom = first.get('geometry')
+                            if geom is not None:
+                                # shapely LineString -> list of (lat, lon)
+                                try:
+                                    pts = [(pt[1], pt[0]) for pt in geom.coords]
+                                    edge_geoms.extend(pts)
+                                except Exception:
+                                    pass
+                        if edge_geoms:
+                            folium.PolyLine(locations=edge_geoms, color='green', weight=4, opacity=0.8).add_to(fmap)
+                            route_drawn = True
+                    except Exception:
+                        pass
+                # 이전 방식(ox.plot_route_folium)을 사용하려면 osmnx 구버전을 설치하세요.
+            except Exception as e:
+                # 실패하면 경고 표시하고 직선으로 연결하도록 한다
+                try:
+                    st.warning('도로 기반 경로 그리기에 실패했습니다. 직선으로 연결합니다. 오류: ' + str(e))
+                except Exception:
+                    pass
+
+        if not route_drawn:
+            # 직선으로 연결 (폴백)
+            try:
+                folium.PolyLine(locations=[[ulat, ulon], [best[lat_col], best[lon_col]]], color='green').add_to(fmap)
+            except Exception as e:
+                try:
+                    st.warning('폴리라인 그리기에 실패했습니다: ' + str(e))
+                except Exception:
+                    pass
 
         # 추가 정보 (맛집 / 여가시설 / 정류장) 표시: 기존 함수들이 반환하면 지도에 마커를 추가
         select_list = ['맛집', '여가시설', '정류장']
