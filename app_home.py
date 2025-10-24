@@ -8,7 +8,7 @@ def run_home():
     st.set_page_config(page_title="인천 맞춤 노인 돌봄 서비스", layout="wide")
 
     # 상단 이미지 삽입 (로컬 이미지 또는 URL 가능)
-    st.image("home_tit.png", use_container_width=True)
+    st.image("data/home_tit.png", use_container_width=True)
     
     # 탭 구성
     tab1, tab2, tab3 = st.tabs(["🏠 홈", "🧭 주요 기능", "📌 기획 배경"])
