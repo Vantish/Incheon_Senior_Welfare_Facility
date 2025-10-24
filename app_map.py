@@ -39,7 +39,7 @@ def run_map():
     # user_location은 리스트 형태를 기대합니다:
     # [위도, 경도, 도로명 주소, 이용하고 싶은 시설 분류]
     if user_location is None:
-        st.error('사용자의 위치가 지정되지 않았습니다. app_location 에서 위치 정보를 전달해주세요.')
+        st.error('사용자의 위치가 지정되지 않았습니다.')
         return
     else:
         # 읽어오기 (euc-kr 인코딩)
