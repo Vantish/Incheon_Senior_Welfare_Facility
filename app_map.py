@@ -44,8 +44,7 @@ def run_map():
     else:
         # 읽어오기 (euc-kr 인코딩)
         노인복지시설_df = pd.read_csv('./data/인천광역시_노인복지시설_현황.csv', encoding = 'euc-kr')
-        st.write('데이터프레임 상위 5개')
-        st.dataframe(노인복지시설_df[노인복지시설_df['시설유형'] == user_location[3]].head())
+
 
         # lat/lon 컬럼 인식 (파일 구조에 따라 컬럼명이 'lat','lon' 등으로 되어 있음)
         cols = [c for c in 노인복지시설_df.columns]
@@ -165,6 +164,10 @@ def run_map():
 
         # 최종 최소 행 선택
         best = road_results.nsmallest(1, 'road_dist_m').iloc[0]
+
+        best5 = road_results.nsmallest(5, 'road_dist_m')
+        st.write('데이터프레임 상위 5개')
+        st.dataframe(best5)
 
         # folium map 생성
         fmap = folium.Map(location=[ulat, ulon], zoom_start=14)
