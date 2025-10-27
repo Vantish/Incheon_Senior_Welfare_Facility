@@ -233,6 +233,10 @@ def run_map():
 
         facilities_location = st.session_state.get('facilities_location', facilities_location)
 
+        # nearby bus stop data placeholders (scope for later display)
+        user_df = None
+        fac_df = None
+
         if '맛집' in selection:
             temp_restaurant = around_restaurant(facilities_location)
             if isinstance(temp_restaurant, pd.DataFrame) and not temp_restaurant.empty:
@@ -290,39 +294,42 @@ def run_map():
                     except Exception:
                         continue
 
-            # 사이드바에 목록 표시 및 버스 노선 조회 버튼
-            with st.sidebar.expander('근처 정류장(사용자 / 시설) 목록'):
-                st.write('사용자 근처 정류장')
-                if user_df is not None and hasattr(user_df, 'head'):
-                    try:
-                        st.dataframe(user_df[['정류장명','행정동명','dist_user_m']].rename(columns={'dist_user_m':'거리(m)'}))
-                    except Exception:
-                        st.write('사용자 근처 정류장 정보를 표시할 수 없습니다.')
-                else:
-                    st.write('사용자 근처 정류장 정보가 없습니다.')
-
-                st.write('시설 근처 정류장')
-                if fac_df is not None and hasattr(fac_df, 'head'):
-                    try:
-                        st.dataframe(fac_df[['정류장명','행정동명','dist_fac_m']].rename(columns={'dist_fac_m':'거리(m)'}))
-                    except Exception:
-                        st.write('시설 근처 정류장 정보를 표시할 수 없습니다.')
-                else:
-                    st.write('시설 근처 정류장 정보가 없습니다.')
-
-                # 버스 노선 데이터가 준비되어 있다면 check_bus_route 호출
-                if st.button('해당 정류장들로 가는 버스 노선 조회'):
-                    try:
-                        routes = check_bus_route({'user': user_df, 'facility': fac_df})
-                        if routes:
-                            st.write('조회된 노선:')
-                            st.json(routes)
-                        else:
-                            st.info('버스 노선 데이터가 없거나 해당 정류장에 대한 노선 정보를 찾을 수 없습니다.')
-                    except Exception as e:
-                        st.error('버스 노선 조회 중 오류: ' + str(e))
+            # (이전에는 사이드바에 표시했으나, 사이드바가 좁아 가독성이 떨어져
+            #  지도를 아래로 출력한 뒤 본문에 근처 정류장 목록과 조회 버튼을 표시합니다.)
 
         # 지도 출력
         fmap_html = fmap._repr_html_()
         st_html(fmap_html, height=600)
+
+        # 지도 아래에 근처 정류장 정보 및 버튼을 표시합니다 (사이드바 대신)
+        st.markdown('### 근처 정류장 (사용자 / 시설)')
+        with st.expander('사용자 근처 정류장'):
+            if user_df is not None and hasattr(user_df, 'head'):
+                try:
+                    st.dataframe(user_df[['정류장명', '행정동명', 'dist_user_m']].rename(columns={'dist_user_m': '거리(m)'}))
+                except Exception:
+                    st.write('사용자 근처 정류장 정보를 표시할 수 없습니다.')
+            else:
+                st.write('사용자 근처 정류장 정보가 없습니다.')
+
+        with st.expander('시설 근처 정류장'):
+            if fac_df is not None and hasattr(fac_df, 'head'):
+                try:
+                    st.dataframe(fac_df[['정류장명', '행정동명', 'dist_fac_m']].rename(columns={'dist_fac_m': '거리(m)'}))
+                except Exception:
+                    st.write('시설 근처 정류장 정보를 표시할 수 없습니다.')
+            else:
+                st.write('시설 근처 정류장 정보가 없습니다.')
+
+        # 버스 노선 조회 버튼 (본체 영역)
+        if st.button('해당 정류장들로 가는 버스 노선 조회'):
+            try:
+                routes = check_bus_route({'user': user_df, 'facility': fac_df})
+                if routes:
+                    st.write('조회된 노선:')
+                    st.json(routes)
+                else:
+                    st.info('버스 노선 데이터가 없거나 해당 정류장에 대한 노선 정보를 찾을 수 없습니다.')
+            except Exception as e:
+                st.error('버스 노선 조회 중 오류: ' + str(e))
     
