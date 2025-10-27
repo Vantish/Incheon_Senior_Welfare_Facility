@@ -237,6 +237,8 @@ def run_map():
         user_df = None
         fac_df = None
 
+        bus_request = False
+
         if '맛집' in selection:
             temp_restaurant = around_restaurant(facilities_location)
             if isinstance(temp_restaurant, pd.DataFrame) and not temp_restaurant.empty:
@@ -266,6 +268,7 @@ def run_map():
                         folium.CircleMarker([r[lat_col], r[lon_col]], radius=4, color='purple', popup=make_popup(popup_text)).add_to(fmap)
         if '정류장' in selection:
             temp_bus_stop = None
+            bus_request = True
             try:
                 temp_bus_stop = bus_stop_recommendation((ulat,ulon), facilities_location)
             except Exception as e:
@@ -302,34 +305,35 @@ def run_map():
         st_html(fmap_html, height=600)
 
         # 지도 아래에 근처 정류장 정보 및 버튼을 표시합니다 (사이드바 대신)
-        st.markdown('### 근처 정류장 (사용자 / 시설)')
-        with st.expander('사용자 근처 정류장'):
-            if user_df is not None and hasattr(user_df, 'head'):
-                try:
-                    st.dataframe(user_df[['정류장명', '행정동명', 'dist_user_m']].rename(columns={'dist_user_m': '거리(m)'}))
-                except Exception:
-                    st.write('사용자 근처 정류장 정보를 표시할 수 없습니다.')
-            else:
-                st.write('사용자 근처 정류장 정보가 없습니다.')
-
-        with st.expander('시설 근처 정류장'):
-            if fac_df is not None and hasattr(fac_df, 'head'):
-                try:
-                    st.dataframe(fac_df[['정류장명', '행정동명', 'dist_fac_m']].rename(columns={'dist_fac_m': '거리(m)'}))
-                except Exception:
-                    st.write('시설 근처 정류장 정보를 표시할 수 없습니다.')
-            else:
-                st.write('시설 근처 정류장 정보가 없습니다.')
-
-        # 버스 노선 조회 버튼 (본체 영역)
-        if st.button('해당 정류장들로 가는 버스 노선 조회'):
-            try:
-                routes = check_bus_route({'user': user_df, 'facility': fac_df})
-                if routes:
-                    st.write('조회된 노선:')
-                    st.json(routes)
+        if bus_request: 
+            st.markdown('### 근처 정류장 (사용자 / 시설)')
+            with st.expander('사용자 근처 정류장'):
+                if user_df is not None and hasattr(user_df, 'head'):
+                    try:
+                        st.dataframe(user_df[['정류장명', '행정동명', 'dist_user_m']].rename(columns={'dist_user_m': '거리(m)'}))
+                    except Exception:
+                        st.write('사용자 근처 정류장 정보를 표시할 수 없습니다.')
                 else:
-                    st.info('버스 노선 데이터가 없거나 해당 정류장에 대한 노선 정보를 찾을 수 없습니다.')
-            except Exception as e:
-                st.error('버스 노선 조회 중 오류: ' + str(e))
+                    st.write('사용자 근처 정류장 정보가 없습니다.')
+
+            with st.expander('시설 근처 정류장'):
+                if fac_df is not None and hasattr(fac_df, 'head'):
+                    try:
+                        st.dataframe(fac_df[['정류장명', '행정동명', 'dist_fac_m']].rename(columns={'dist_fac_m': '거리(m)'}))
+                    except Exception:
+                        st.write('시설 근처 정류장 정보를 표시할 수 없습니다.')
+                else:
+                    st.write('시설 근처 정류장 정보가 없습니다.')
+
+            # 버스 노선 조회 버튼 (본체 영역)
+            if st.button('해당 정류장들로 가는 버스 노선 조회'):
+                try:
+                    routes = check_bus_route({'user': user_df, 'facility': fac_df})
+                    if routes:
+                        st.write('조회된 노선:')
+                        st.json(routes)
+                    else:
+                        st.info('버스 노선 데이터가 없거나 해당 정류장에 대한 노선 정보를 찾을 수 없습니다.')
+                except Exception as e:
+                    st.error('버스 노선 조회 중 오류: ' + str(e))
     
