@@ -1,9 +1,9 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.neighbors import NearestNeighbors
-from geopy.geocoders import Nominatim
-from geopy.distance import distance
-from geopy.distance import geodesic
+import streamlit as st
+import numpy as np
+
 
 
 
@@ -24,16 +24,12 @@ def bus_stop_recommendation(user_location, facilities_location, n_neighbors=10):
     lon_col = next((c for c in cols if '경도' in c.lower() or 'longitude' in c.lower() or 'lon' == c.lower() or 'lng' == c.lower()), None)
     정류장명 = next((c for c in cols if any(term in c.lower() for term in ['정류소명', '정류장명', '정류소 명', '정류장 명'])), None)
     행정동명 = next((c for c in cols if any(term in c.lower() for term in ['행정동명', '행정동 명', '동이름'])), None)
+    정류장ID = next((c for c in cols if any(term in c.lower() for term in ['정류장 id', '정류장ID', '정류소아이디', '정류소 아이디'])), None)
 
     if (lat_col is None) or (lon_col is None):
         st.error(f'위도/경도 컬럼을 찾을 수 없습니다. 현재 컬럼: {", ".join(cols)}')
         return None
-    if 정류장명 is None:
-        st.warning('정류장명 컬럼을 찾을 수 없습니다. 대체값을 사용합니다.')
-        정류장명 = cols[0]
-    if 행정동명 is None:
-        st.warning('행정동명 컬럼을 찾을 수 없습니다. 대체값을 사용합니다.')
-        행정동명 = cols[0]
+
 
     # --- 결측치 정리 ---
     bus_stops_df_clean = bus_stops_df.dropna(subset=[lat_col, lon_col])
@@ -63,6 +59,7 @@ def bus_stop_recommendation(user_location, facilities_location, n_neighbors=10):
                     'lon': float(bus_stop[lon_col]),
                     '정류장명': bus_stop[정류장명],
                     '행정동명': bus_stop[행정동명],
+                    '정류장ID': bus_stop[정류장ID],
                     'dist_user_m': int(dist * 1000)
                 }
                 user_stops.append(stop_info)
@@ -96,6 +93,7 @@ def bus_stop_recommendation(user_location, facilities_location, n_neighbors=10):
                     'lon': float(bus_stop[lon_col]),
                     '정류장명': bus_stop[정류장명],
                     '행정동명': bus_stop[행정동명],
+                    '정류장ID': bus_stop[정류장ID],
                     'dist_fac_m': int(dist * 1000)
                 }
                 facility_stops.append(stop_info)
@@ -105,8 +103,8 @@ def bus_stop_recommendation(user_location, facilities_location, n_neighbors=10):
             facility_stops = []
 
     # --- DataFrame 생성과 컬럼 정렬 ---
-    user_columns = ['lat', 'lon', '정류장명', '행정동명', 'dist_user_m']
-    fac_columns = ['lat', 'lon', '정류장명', '행정동명', 'dist_fac_m']
+    user_columns = ['lat', 'lon', '정류장명', '행정동명','정류장ID,' 'dist_user_m']
+    fac_columns = ['lat', 'lon', '정류장명', '행정동명','정류장ID', 'dist_fac_m']
 
     user_df = pd.DataFrame(user_stops, columns=user_columns)
     fac_df = pd.DataFrame(facility_stops, columns=fac_columns)
