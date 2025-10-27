@@ -24,7 +24,7 @@ def bus_stop_recommendation(user_location, facilities_location, n_neighbors=10):
     lon_col = next((c for c in cols if '경도' in c.lower() or 'longitude' in c.lower() or 'lon' == c.lower() or 'lng' == c.lower()), None)
     정류장명 = next((c for c in cols if any(term in c.lower() for term in ['정류소명', '정류장명', '정류소 명', '정류장 명'])), None)
     행정동명 = next((c for c in cols if any(term in c.lower() for term in ['행정동명', '행정동 명', '동이름'])), None)
-    정류장ID = next((c for c in cols if any(term in c.lower() for term in ['정류장 id', '정류장ID', '정류소아이디', '정류소 아이디'])), None)
+    정류소아이디 = next((c for c in cols if any(term in c.lower() for term in ['정류장 id', '정류장ID', '정류소아이디', '정류소 아이디'])), None)
 
     if (lat_col is None) or (lon_col is None):
         st.error(f'위도/경도 컬럼을 찾을 수 없습니다. 현재 컬럼: {", ".join(cols)}')
@@ -59,7 +59,7 @@ def bus_stop_recommendation(user_location, facilities_location, n_neighbors=10):
                     'lon': float(bus_stop[lon_col]),
                     '정류장명': bus_stop[정류장명],
                     '행정동명': bus_stop[행정동명],
-                    '정류장ID': bus_stop[정류장ID],
+                    '정류장ID': bus_stop[정류소아이디],
                     'dist_user_m': int(dist * 1000)
                 }
                 user_stops.append(stop_info)
@@ -93,7 +93,7 @@ def bus_stop_recommendation(user_location, facilities_location, n_neighbors=10):
                     'lon': float(bus_stop[lon_col]),
                     '정류장명': bus_stop[정류장명],
                     '행정동명': bus_stop[행정동명],
-                    '정류장ID': bus_stop[정류장ID],
+                    '정류장ID': bus_stop[정류소아이디],
                     'dist_fac_m': int(dist * 1000)
                 }
                 facility_stops.append(stop_info)
