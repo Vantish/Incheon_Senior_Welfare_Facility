@@ -358,7 +358,7 @@ def run_map():
         if '정류장' in selection:
             temp_bus_stop = None
             try:
-                temp_bus_stop = bus_stop_recommendation((ulat, ulon), facilities_location)
+                temp_bus_stop = bus_stop_recommendation((ulat,ulon), facilities_location)
             except Exception as e:
                 st.warning('정류장 추천 모듈 호출 중 오류가 발생했습니다: ' + str(e))
 
