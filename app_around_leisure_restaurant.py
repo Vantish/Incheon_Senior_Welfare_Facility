@@ -228,14 +228,14 @@ def around_leisure(facilities_location):
 
 # If run directly, quick demo via streamlit UI hook (keeps backward compatibility)
 if __name__ == '__main__':
-	st.title("테스트: 위치 기반 시설 추천 (단독 실행)")
+	st.title("내 위치 기반 주변 맛집/여가시설 추천")
 	location_info = run_location()
 	if location_info:
 		lat, lon, addr, sel = location_info
 		st.write("위치:", lat, lon)
-		st.write("근처 맛집(예):")
+		st.write("주변 맛집:")
 		st.dataframe(around_restaurant((lat, lon)))
-		st.write("근처 여가시설(예):")
+		st.write("주변 여가시설:")
 		st.dataframe(around_leisure((lat, lon)))
 	else:
 		st.info("app_location.py의 run_location()이 위치를 반환해야 합니다.")

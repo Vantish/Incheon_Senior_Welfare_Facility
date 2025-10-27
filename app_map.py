@@ -156,6 +156,11 @@ def run_map():
     st.subheader('위치 기반 추천')
     st.text('\n')
     user_location = run_location()
+    if 'user_location' in st.session_state:
+        user_location = st.session_state['user_location']
+
+        
+    
     # user_location은 리스트 형태를 기대합니다:
     # [위도, 경도, 도로명 주소, 이용하고 싶은 시설 분류]
     if user_location is None:
@@ -227,6 +232,12 @@ def run_map():
 
         # folium map 생성
         fmap = folium.Map(location=[ulat, ulon], zoom_start=14)
+        # 세션에 기본 맵 객체를 저장(같은 세션 내 재실행 시 참조 가능)
+        try:
+            st.session_state['fmap'] = fmap
+        except Exception:
+            # session_state에 저장 불가하면 무시
+            pass
         # popup을 HTML로 만들어 가로 표시와 자동 줄바꿈을 적용
         def make_popup(text, width=240):
             # text에 '<br>'이 포함되어 있으면 적절히 분리해 각 부분을 escape 후 다시 합칩니다.
@@ -301,9 +312,21 @@ def run_map():
                 pass
 
         # 추가 정보 (맛집 / 여가시설 / 정류장) 표시: 기존 함수들이 반환하면 지도에 마커를 추가
+        # 세션에 저장된 맵 객체가 있으면 그 객체를 우선 사용
+        try:
+            fmap = st.session_state.get('fmap', fmap)
+        except Exception:
+            pass
         select_list = ['맛집', '여가시설', '정류장']
         selection = st.multiselect('추가적으로 사용하실 정보를 입력해주세요.', select_list)
         facilities_location = (best[lat_col], best[lon_col])
+        try:
+            st.session_state['facilities_location'] = facilities_location
+        except Exception:
+            # session_state에 저장 불가하면 무시
+            pass
+
+        facilities_location = st.session_state.get('facilities_location', facilities_location)
 
         if '맛집' in selection:
             temp_restaurant = around_restaurant(facilities_location)
