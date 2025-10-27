@@ -4,6 +4,7 @@ import requests
 import xml.etree.ElementTree as ET
 from html import unescape
 import streamlit as st
+from datetime import datetime
 
 # API 키 소스 우선순위:
 # 1) Streamlit secrets (st.secrets['INCHEON_BUS_API_KEY'])
@@ -128,13 +129,16 @@ def check_bus_route(bus_dic, api_key=None):
                     stops.append((str(it), None))
         return stops
 
-    # 엔드포인트 후보들 (순서대로 시도). 실제 동작은 사용자의 환경/키에 따라 달라집니다.
+    # 엔드포인트 후보들 (정류장 -> 노선 조회에 유용한 후보들을 우선 포함)
+    # 일부 공공데이터 API는 서비스명/경로가 다르므로 여러 후보를 순차 시도합니다.
     endpoints = [
-        # Incheon 공공데이터 포털(예상) - arsId로 정류소 조회, JSON 가능
-        ('Incheon_SttnAcctoThrghRouteList', 'http://apis.data.go.kr/1613000/BusSttnInfoInqireService/getSttnAcctoThrghRouteList'),
-        ('Incheon_HTTPS', 'https://apis.data.go.kr/1613000/BusSttnInfoInqireService/getSttnAcctoThrghRouteList'),
-        # 서울시(참고용) - ws.bus.go.kr
-        ('Seoul_ws_bus', 'http://ws.bus.go.kr/api/rest/stationinfo/getRouteByStation')
+        # 인천/일반 정류장 기반 노선조회(널리 사용되는 이름)
+        ('getSttnAcctoThrghRouteList', 'http://apis.data.go.kr/1613000/BusSttnInfoInqireService/getSttnAcctoThrghRouteList'),
+        ('getSttnAcctoThrghRouteList_https', 'https://apis.data.go.kr/1613000/BusSttnInfoInqireService/getSttnAcctoThrghRouteList'),
+        # 국토교통부(버스 노선) 관련 엔드포인트 후보들
+        ('MOLIT_getRouteInfoList', 'https://apis.data.go.kr/1613000/BusRoute/getRouteInfoList'),
+        ('MOLIT_getRouteInfoItem', 'https://apis.data.go.kr/1613000/BusRoute/getRouteInfoItem'),
+        ('MOLIT_getBusRouteList', 'https://apis.data.go.kr/1613000/BusRoute/getBusRouteList'),
     ]
 
     for side in ('user', 'facility'):
@@ -149,21 +153,65 @@ def check_bus_route(bus_dic, api_key=None):
                 continue
             # try endpoints
             for ename, base in endpoints:
-                # build params
-                params = {}
-                if 'data.go.kr' in base:
-                    params = {'serviceKey': key, 'arsId': sid if sid is not None else name, '_type': 'json'}
-                elif 'ws.bus.go.kr' in base:
-                    params = {'ServiceKey': key, 'arsId': sid if sid is not None else name}
-                else:
-                    params = {'serviceKey': key, 'arsId': sid if sid is not None else name}
+                # build a set of candidate param dicts for this endpoint
+                param_candidates = []
 
-                vals, err = _try_endpoint_get_routes(ename, base, params)
-                if err:
-                    errors.append(f'{ename}:{err}')
-                    continue
-                if vals:
-                    routes = vals
+                # heuristics: 정류장 기반 엔드포인트명에는 'Sttn' 또는 'sttn'이 포함되는 경우가 많음
+                if 'sttn' in ename.lower() or 'sttn' in base.lower() or 'station' in ename.lower():
+                    # 정류장 ID(arsId, sttnId 등) 우선
+                    if sid is not None and str(sid) != '':
+                        param_candidates.extend([
+                            {'serviceKey': key, 'arsId': sid, '_type': 'json'},
+                            {'serviceKey': key, 'sttnId': sid, '_type': 'json'},
+                            {'ServiceKey': key, 'arsId': sid},
+                            {'ServiceKey': key, 'sttnId': sid},
+                        ])
+                    # 이름 기반 파라미터 후보
+                    if name is not None and name != 'None':
+                        param_candidates.extend([
+                            {'serviceKey': key, 'sttnNm': name, '_type': 'json'},
+                            {'ServiceKey': key, 'sttnNm': name},
+                        ])
+                    # 일부 엔드포인트는 dataType=JSON을 요구
+                    param_candidates = [dict(p, **({'dataType': 'JSON'} if '_type' not in p else {})) for p in param_candidates]
+
+                else:
+                    # 노선/route 관련 엔드포인트 후보
+                    if sid is not None and str(sid) != '':
+                        # 주의: 여기서 sid가 실제로는 정류장 ID일 수 있으므로 노선 API에서 유효하지 않을 수 있음
+                        param_candidates.extend([
+                            {'serviceKey': key, 'rte_id': sid, 'dataType': 'JSON'},
+                            {'serviceKey': key, 'routeId': sid, 'dataType': 'JSON'},
+                            {'ServiceKey': key, 'rte_id': sid},
+                        ])
+                    if name is not None and name != 'None':
+                        param_candidates.append({'serviceKey': key, 'routeNo': name, 'dataType': 'JSON'})
+
+                # 시도
+                tried_any = False
+                for params in param_candidates:
+                    tried_any = True
+                    vals, err = _try_endpoint_get_routes(ename, base, params)
+                    if err:
+                        # 저장해두고 다음 후보 시도
+                        errors.append(f'{ename}:{err}')
+                        time.sleep(0.05)
+                        continue
+                    if vals:
+                        routes = vals
+                        break
+
+                # 후보가 전혀 생성되지 않았다면, 기본 호출 한번 시도
+                if not tried_any:
+                    # 기본 형태: 정류장 id/name을 arsId로 전달 시도
+                    params = {'serviceKey': key, 'arsId': sid if sid is not None else name, '_type': 'json'}
+                    vals, err = _try_endpoint_get_routes(ename, base, params)
+                    if err:
+                        errors.append(f'{ename}:{err}')
+                    elif vals:
+                        routes = vals
+
+                if routes:
                     break
                 # small pause between tries
                 time.sleep(0.1)
