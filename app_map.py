@@ -210,17 +210,6 @@ def run_map():
             st.error('선택된 유형의 시설이 없습니다.')
             return
 
-        # haversine 거리 계산
-        def haversine(a, b):
-            # a, b: (lat, lon) in degrees
-            lat1, lon1 = math.radians(a[0]), math.radians(a[1])
-            lat2, lon2 = math.radians(b[0]), math.radians(b[1])
-            dlat = lat2 - lat1
-            dlon = lon2 - lon1
-            R = 6371000.0
-            hav = math.sin(dlat/2)**2 + math.cos(lat1)*math.cos(lat2)*math.sin(dlon/2)**2
-            return 2*R*math.asin(math.sqrt(hav))
-
         # 거리 계산을 별도 함수로 분리하여 사용
         # find_nearest_facilities는 내부적으로 직선거리 기반 후보 필터링과
         # (가능하면) 도로기반 거리를 계산하여 정렬된 결과를 반환합니다.
