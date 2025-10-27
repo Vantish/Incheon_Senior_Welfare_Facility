@@ -245,7 +245,7 @@ def run_map():
                         label = r.get('상호', '맛집')
                         # 식당명 + (가능하면 주소/설명)
                         extra = ''
-                        for c in ['주소','도로명주소','소재지','상세주소']:
+                        for c in ['주소','도로명 주소','소재지','상세주소']:
                             if c in r and pd.notna(r[c]):
                                 extra = r[c]
                                 break
@@ -258,7 +258,7 @@ def run_map():
                     if lat_col in r and lon_col in r:
                         label = r.get('이름', '여가')
                         extra = ''
-                        for c in ['주소','위치','설명']:
+                        for c in ['주소','위치','설명','도로명 주소','시설분류']:
                             if c in r and pd.notna(r[c]):
                                 extra = r[c]
                                 break
