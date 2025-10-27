@@ -31,6 +31,126 @@ GRAPH_CACHE_PATH = './incheon_graph.pkl'
 # 만약 사용자가 근처 맛집이나 가는 버스를 알고싶다면 멀티셀렉트를 이용하여 해당 기능을 지도에 표시합니다.
 # 이후 각각의 부분에서 받아온 함수를 상황에 맞게 동작시켜서 정보를 받은 후, 해당 정보를 출력합니다.
 
+import os
+import pickle
+
+
+# 거리 계산 및 도로 기반 최단 시설 선택 유틸리티 함수
+#
+# 함수: find_nearest_facilities
+# 입력:
+# - user_location: (lat, lon) 튜플 또는 리스트
+# - facilities_df: 위도/경도 컬럼을 가진 pandas.DataFrame
+# - return_count: 최종 반환할 상위 시설 개수 (기본 5)
+# - candidate_prefilter: 도로 거리 계산 전 직선거리로 미리 뽑아둘 후보 수 (기본 20)
+# - graph_cache_path: osmnx 그래프 피클 파일 경로 (있으면 도로 기반 계산 시도)
+#
+# 반환:
+# - pandas.DataFrame: 원본 컬럼에 'straight_dist_m'과 'road_dist_m' 컬럼을 추가한 후
+#   road_dist_m 오름차순으로 정렬된 데이터프레임 (최소 return_count개 반환)
+#
+# 함수는 osmnx가 설치되어 있고 graph_cache_path에 캐시가 존재하면 도로 기반 경로 길이를
+# 계산하려 시도합니다. 실패하거나 osmnx가 없으면 straight_dist_m을 road_dist_m으로 사용합니다.
+
+try:
+    import osmnx as ox
+    import networkx as nx
+    _OSM = True
+except Exception:
+    _OSM = False
+
+
+def _haversine_m(a, b):
+    """두 지점(a, b)의 직선 거리(m)를 반환합니다. 입력은 (lat, lon)."""
+    lat1, lon1 = math.radians(a[0]), math.radians(a[1])
+    lat2, lon2 = math.radians(b[0]), math.radians(b[1])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    R = 6371000.0
+    hav = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+    return 2 * R * math.asin(math.sqrt(hav))
+
+
+def find_nearest_facilities(user_location, facilities_df: pd.DataFrame, return_count: int = 5, 
+                            candidate_prefilter: int = 20, graph_cache_path: str = './incheon_graph.pkl') -> pd.DataFrame:
+    """
+    사용자의 위치와 시설 데이터프레임을 받아 가장 가까운 시설들을 반환합니다.
+
+    - 동작 흐름:
+      1) facilities_df에서 위도/경도 컬럼(lat, lon 또는 lot 등)을 자동으로 판별합니다.
+      2) 직선거리(straight_dist_m)를 계산하여 candidate_prefilter 수만큼 후보를 추립니다.
+      3) 캐시된 osmnx 그래프(graph_cache_path)가 존재하고 osmnx가 설치되어 있으면
+         해당 그래프를 사용해 사용자->후보 간 도로기반 거리(road_dist_m)를 계산합니다.
+      4) 도로거리 계산 실패 시 road_dist_m은 straight_dist_m으로 대체됩니다.
+      5) road_dist_m 기준으로 오름차순 정렬한 데이터프레임을 반환합니다.
+
+    주의: 이 함수는 UI(예: streamlit)를 직접 사용하지 않으며, 실패 시 예외를 잡아
+    가능한 직선거리 기반으로 안전하게 동작합니다.
+    """
+    if user_location is None or facilities_df is None:
+        raise ValueError('user_location과 facilities_df는 None이 될 수 없습니다.')
+
+    # 입력 검증
+    try:
+        ulat = float(user_location[0])
+        ulon = float(user_location[1])
+    except Exception:
+        raise ValueError('user_location은 (lat, lon) 형태여야 합니다.')
+
+    df = facilities_df.copy()
+
+    # lat/lon 컬럼 자동 판별
+    cols = [c for c in df.columns]
+    lat_col = next((c for c in cols if 'lat' in c.lower()), None)
+    lon_col = next((c for c in cols if 'lon' in c.lower() or 'lot' in c.lower()), None)
+    if lat_col is None or lon_col is None:
+        raise ValueError('facilities_df에 lat/lon 컬럼이 없습니다. 파일 컬럼: ' + ','.join(cols))
+
+    df = df.dropna(subset=[lat_col, lon_col]).copy()
+    df[lat_col] = df[lat_col].astype(float)
+    df[lon_col] = df[lon_col].astype(float)
+
+    if df.shape[0] == 0:
+        return df
+
+    # 직선거리 계산
+    df['straight_dist_m'] = df.apply(lambda r: _haversine_m((ulat, ulon), (r[lat_col], r[lon_col])), axis=1)
+
+    # 후보 프리필터: 직선거리 기준으로 가장 가까운 candidate_prefilter개
+    candidate_n = min(candidate_prefilter, len(df))
+    candidates = df.nsmallest(candidate_n, 'straight_dist_m').copy()
+
+    # 도로 기반 거리 계산 시도 (캐시된 그래프가 있으면 사용)
+    road_results = None
+    if _OSM:
+        try:
+            if os.path.exists(graph_cache_path):
+                with open(graph_cache_path, 'rb') as fh:
+                    G = pickle.load(fh)
+                # nearest nodes for user and candidates
+                user_node = ox.nearest_nodes(G, ulon, ulat)
+                cand_nodes = ox.nearest_nodes(G, candidates[lon_col].tolist(), candidates[lat_col].tolist())
+                lengths = []
+                for n in cand_nodes:
+                    try:
+                        d = nx.shortest_path_length(G, user_node, n, weight='length')
+                        lengths.append(d)
+                    except Exception:
+                        lengths.append(float('inf'))
+                candidates['road_dist_m'] = lengths
+                road_results = candidates
+        except Exception:
+            road_results = None
+
+    # 도로 거리가 계산되지 않았다면 직선거리로 대체
+    if road_results is None:
+        candidates['road_dist_m'] = candidates['straight_dist_m']
+        road_results = candidates
+
+    # road_dist_m 기준으로 정렬하고 return_count개 반환
+    road_results_sorted = road_results.sort_values('road_dist_m', ascending=True).reset_index(drop=True)
+    return road_results_sorted.head(return_count if return_count is not None else len(road_results_sorted))
+
 
 def run_map():
     st.subheader('위치 기반 추천')
@@ -101,71 +221,18 @@ def run_map():
             hav = math.sin(dlat/2)**2 + math.cos(lat1)*math.cos(lat2)*math.sin(dlon/2)**2
             return 2*R*math.asin(math.sqrt(hav))
 
-        # 직선거리 기준으로 상위 후보 k개만 추림 (속도 개선)
-        k = min(20, len(candidates))
-        candidates['straight_dist_m'] = candidates.apply(lambda r: haversine((ulat, ulon), (r[lat_col], r[lon_col])), axis=1)
-        top_candidates = candidates.nsmallest(k, 'straight_dist_m').copy()
+        # 거리 계산을 별도 함수로 분리하여 사용
+        # find_nearest_facilities는 내부적으로 직선거리 기반 후보 필터링과
+        # (가능하면) 도로기반 거리를 계산하여 정렬된 결과를 반환합니다.
+        # 기본적으로 candidate_prefilter=20, return_count=5로 동작하여 기존과 동일한 동작을 유지합니다.
+        road_results = find_nearest_facilities((ulat, ulon), candidates, return_count=5, candidate_prefilter=20, graph_cache_path=GRAPH_CACHE_PATH)
 
-        # 도로기반 거리 계산 (osmnx 사용). 실패 시 직선거리로 대체
-        use_road = OSMNX_AVAILABLE
-        G = None
-        # 그래프가 캐시되어 있는지 확인 후 로드
-        if use_road:
-            try:
-                import os
-                import pickle
-                if os.path.exists(GRAPH_CACHE_PATH):
-                    with open(GRAPH_CACHE_PATH, 'rb') as fh:
-                        G = pickle.load(fh)
-                        st.info('캐시된 OSMnx 그래프를 불러왔습니다. 로딩이 빠릅니다.')
-                else:
-                    # 사용자가 그래프를 미리 생성하도록 버튼 제공
-                    if st.button('인천 도로 그래프 생성 및 저장 (처음 한 번만 필요)'):
-                        try:
-                            with st.spinner('OSM 데이터 다운로드 및 그래프 생성 중... (몇 분 소요될 수 있음)'):
-                                G = ox.graph_from_place('Incheon, South Korea', network_type='drive')
-                                with open(GRAPH_CACHE_PATH, 'wb') as fh:
-                                    pickle.dump(G, fh)
-                                st.success('그래프 생성 및 저장이 완료되었습니다.')
-                        except Exception as e:
-                            st.error('그래프 생성에 실패했습니다: ' + str(e))
-                            G = None
-            except Exception:
-                G = None
-        road_results = None
-        if not OSMNX_AVAILABLE:
-            st.warning('osmnx/networkx 패키지가 설치되어 있지 않아 도로 기반 경로 계산을 건너뜁니다. straight-line fallback 사용')
-        if use_road and G is not None:
-            try:
-                # 그래프는 사용자 위치 중심 반경 15km
-                # 이미 G가 캐시된 경우엔 그대로 사용하고, 아니라면 그래프를 해당 지점 중심으로 다운로드 시도
-                if G is None:
-                    G = ox.graph_from_point((ulat, ulon), dist=15000, network_type='drive')
-                # nearest nodes for user and candidates
-                user_node = ox.nearest_nodes(G, ulon, ulat)
-                cand_nodes = ox.nearest_nodes(G, top_candidates[lon_col].tolist(), top_candidates[lat_col].tolist())
-                lengths = []
-                for n in cand_nodes:
-                    try:
-                        d = nx.shortest_path_length(G, user_node, n, weight='length')
-                        lengths.append(d)
-                    except Exception:
-                        lengths.append(float('inf'))
-                top_candidates['road_dist_m'] = lengths
-                road_results = top_candidates
-            except Exception as e:
-                st.warning('도로 기반 거리 계산에 실패했습니다. 직선거리로 대체합니다. 오류: ' + str(e))
-                use_road = False
-
-        if not use_road or road_results is None:
-            # fallback: straight_dist_m 에 기반
-            top_candidates['road_dist_m'] = top_candidates['straight_dist_m']
-            road_results = top_candidates
-
-        # 최종 최소 행 선택
-        best = road_results.nsmallest(1, 'road_dist_m').iloc[0]
-
-        best5 = road_results.nsmallest(5, 'road_dist_m')
+        # 최종 선택
+        if road_results is None or road_results.shape[0] == 0:
+            st.error('거리 계산 결과가 없습니다.')
+            return
+        best = road_results.iloc[0]
+        best5 = road_results.head(5)
         st.write('데이터프레임 상위 5개')
         st.dataframe(best5)
 
@@ -189,60 +256,60 @@ def run_map():
         best_title = str(best.get(type_col, '시설')) + '<br>' + str(best.get(노인복지시설_df.columns[0], '이름'))
         folium.Marker([best[lat_col], best[lon_col]], popup=make_popup(best_title), icon=folium.Icon(color='red')).add_to(fmap)
 
-        # 경로 polyline: 우선 도로(graph) 기반으로 그리되, 그래프나 노드가 없으면 직선으로 fallback
+        # 경로 polyline: osmnx 그래프 캐시가 있으면 도로 기반으로 그리되,
+        # 없거나 실패하면 항상 직선으로 fallback 하도록 안전하게 처리합니다.
         route_drawn = False
-        if use_road and G is not None and 'user_node' in locals():
+        if OSMNX_AVAILABLE:
             try:
-                # 경로 노드들 가져와서 선으로 그림
-                target_node = ox.nearest_nodes(G, best[lon_col], best[lat_col])
-                route = nx.shortest_path(G, user_node, target_node, weight='length')
-
-                # 최신 osmnx 버전에서는 plot_route_folium이 제공되지 않을 수 있으므로
-                # 노드 좌표를 직접 추출해 folium PolyLine으로 그립니다.
-                try:
-                    coords = [(float(G.nodes[n]['y']), float(G.nodes[n]['x'])) for n in route]
-                    folium.PolyLine(locations=coords, color='green', weight=4, opacity=0.8).add_to(fmap)
-                    route_drawn = True
-                except Exception:
-                    # 노드에 x/y가 없거나 다른 포맷인 경우, edge geometry를 시도
+                import os
+                import pickle
+                G = None
+                if os.path.exists(GRAPH_CACHE_PATH):
+                    with open(GRAPH_CACHE_PATH, 'rb') as fh:
+                        G = pickle.load(fh)
+                if G is not None:
                     try:
-                        edge_geoms = []
-                        for u, v in zip(route[:-1], route[1:]):
-                            data = G.get_edge_data(u, v)
-                            if data is None:
-                                continue
-                            # 여러 에지 중 첫번째의 geometry 속성을 사용
-                            first = next(iter(data.values()))
-                            geom = first.get('geometry')
-                            if geom is not None:
-                                # shapely LineString -> list of (lat, lon)
-                                try:
-                                    pts = [(pt[1], pt[0]) for pt in geom.coords]
-                                    edge_geoms.extend(pts)
-                                except Exception:
-                                    pass
-                        if edge_geoms:
-                            folium.PolyLine(locations=edge_geoms, color='green', weight=4, opacity=0.8).add_to(fmap)
+                        user_node = ox.nearest_nodes(G, ulon, ulat)
+                        target_node = ox.nearest_nodes(G, best[lon_col], best[lat_col])
+                        route = nx.shortest_path(G, user_node, target_node, weight='length')
+
+                        # 노드 좌표로 폴리라인을 그림
+                        try:
+                            coords = [(float(G.nodes[n]['y']), float(G.nodes[n]['x'])) for n in route]
+                            folium.PolyLine(locations=coords, color='green', weight=4, opacity=0.8).add_to(fmap)
                             route_drawn = True
+                        except Exception:
+                            # edge geometry fallback
+                            try:
+                                edge_geoms = []
+                                for u, v in zip(route[:-1], route[1:]):
+                                    data = G.get_edge_data(u, v)
+                                    if data is None:
+                                        continue
+                                    first = next(iter(data.values()))
+                                    geom = first.get('geometry')
+                                    if geom is not None:
+                                        try:
+                                            pts = [(pt[1], pt[0]) for pt in geom.coords]
+                                            edge_geoms.extend(pts)
+                                        except Exception:
+                                            pass
+                                if edge_geoms:
+                                    folium.PolyLine(locations=edge_geoms, color='green', weight=4, opacity=0.8).add_to(fmap)
+                                    route_drawn = True
+                            except Exception:
+                                pass
                     except Exception:
-                        pass
-                # 이전 방식(ox.plot_route_folium)을 사용하려면 osmnx 구버전을 설치하세요.
-            except Exception as e:
-                # 실패하면 경고 표시하고 직선으로 연결하도록 한다
-                try:
-                    st.warning('도로 기반 경로 그리기에 실패했습니다. 직선으로 연결합니다. 오류: ' + str(e))
-                except Exception:
-                    pass
+                        # 도로 경로 계산 실패는 무시하고 직선 폴백으로 처리
+                        route_drawn = False
+            except Exception:
+                route_drawn = False
 
         if not route_drawn:
-            # 직선으로 연결 (폴백)
             try:
                 folium.PolyLine(locations=[[ulat, ulon], [best[lat_col], best[lon_col]]], color='green').add_to(fmap)
-            except Exception as e:
-                try:
-                    st.warning('폴리라인 그리기에 실패했습니다: ' + str(e))
-                except Exception:
-                    pass
+            except Exception:
+                pass
 
         # 추가 정보 (맛집 / 여가시설 / 정류장) 표시: 기존 함수들이 반환하면 지도에 마커를 추가
         select_list = ['맛집', '여가시설', '정류장']
