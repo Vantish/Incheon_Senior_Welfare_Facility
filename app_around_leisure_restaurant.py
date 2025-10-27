@@ -2,6 +2,7 @@ import pandas as pd
 import streamlit as st
 from app_location import run_location
 from geopy.distance import geodesic
+from define import _find_lat_lon_cols, _ensure_coord_aliases, _standardize_restaurant_columns, _standardize_leisure_columns
 
 
 # app_location 부분에서 입력받은 사용자의 위치정보를 통해
@@ -14,94 +15,8 @@ from geopy.distance import geodesic
 시설_df = pd.read_csv('./data/인천광역시 시설 현황.csv', encoding='CP949')
 
 
-def _find_lat_lon_cols(df):
-	"""Return (lat_col, lon_col) names if found, else (None, None). Tries common variations."""
-	if df is None or df.shape[0] == 0:
-		return None, None
-	cols = list(df.columns)
-	low = [c.lower() for c in cols]
-	# candidates
-	lat_candidates = ['lat', '위도', 'latitude']
-	lon_candidates = ['lon', 'lot', '경도', 'longitude', 'lng']
-	lat_col = None
-	lon_col = None
-	for i, c in enumerate(low):
-		if lat_col is None and any(k in c for k in lat_candidates):
-			lat_col = cols[i]
-		if lon_col is None and any(k in c for k in lon_candidates):
-			lon_col = cols[i]
-		if lat_col and lon_col:
-			break
-	# try exact matches '위도' '경도'
-	if lat_col is None and '위도' in cols:
-		lat_col = '위도'
-	if lon_col is None and '경도' in cols:
-		lon_col = '경도'
-	return lat_col, lon_col
-
-
-def _ensure_coord_aliases(df, src_lat, src_lon):
-	"""Create standardized coordinate columns and many common aliases so other modules can find them.
-
-	Always returns a copy.
-	"""
-	df = df.copy()
-	# numeric conversion
-	try:
-		df['lat'] = pd.to_numeric(df[src_lat].astype(str).str.replace(',', '').str.strip(), errors='coerce')
-	except Exception:
-		df['lat'] = pd.NA
-	try:
-		df['lon'] = pd.to_numeric(df[src_lon].astype(str).str.replace(',', '').str.strip(), errors='coerce')
-	except Exception:
-		df['lon'] = pd.NA
-	# aliases
-	aliases_lat = ['위도', 'latitude', 'LAT', 'Lat']
-	aliases_lon = ['경도', 'longitude', 'LON', 'Lon', 'lot']
-	for a in aliases_lat:
-		if a not in df.columns:
-			df[a] = df['lat']
-	for a in aliases_lon:
-		if a not in df.columns:
-			df[a] = df['lon']
-	return df
-
-
-def _pick_first_column(df, candidates):
-	for c in candidates:
-		if c in df.columns:
-			return c
-	return None
-
-
-def _standardize_restaurant_columns(df):
-	df = df.copy()
-	name_candidates = ['상호', '상호명', '업소명', '식당명', '업체명', '사업장명']
-	addr_candidates = ['도로명 주소', '도로명주소', '주소', '소재지', '지번주소']
-	name_col = _pick_first_column(df, name_candidates)
-	if name_col and '상호' not in df.columns:
-		df['상호'] = df[name_col]
-	addr_col = _pick_first_column(df, addr_candidates)
-	if addr_col and '도로명 주소' not in df.columns:
-		df['도로명 주소'] = df[addr_col]
-	return df
-
-
-def _standardize_leisure_columns(df):
-	df = df.copy()
-	name_candidates = ['이름', '시설명', '명칭']
-	addr_candidates = ['도로명 주소', '도로명주소', '주소', '위치']
-	type_candidates = ['시설분류', '종류', '구분']
-	name_col = _pick_first_column(df, name_candidates)
-	if name_col and '이름' not in df.columns:
-		df['이름'] = df[name_col]
-	addr_col = _pick_first_column(df, addr_candidates)
-	if addr_col and '도로명 주소' not in df.columns:
-		df['도로명 주소'] = df[addr_col]
-	type_col = _pick_first_column(df, type_candidates)
-	if type_col and '시설분류' not in df.columns:
-		df['시설분류'] = df[type_col]
-	return df
+# helper utilities are provided by define.py: _find_lat_lon_cols, _ensure_coord_aliases,
+# _standardize_restaurant_columns, _standardize_leisure_columns
 
 
 def around_restaurant(facilities_location):

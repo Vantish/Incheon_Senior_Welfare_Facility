@@ -4,7 +4,7 @@ from app_bus_route import check_bus_route
 from app_around_leisure_restaurant import around_leisure
 from app_around_leisure_restaurant import around_restaurant
 from app_location import run_location
-from define import find_nearest_facilities
+from define import find_nearest_facilities, make_popup, draw_route_on_map
 
 import numpy as np
 import pandas as pd
@@ -58,206 +58,132 @@ import pickle
 
 
 def run_map():
+    """Main Streamlit entry: show map, nearby facilities and optional overlays.
+
+    This version preserves original behaviour but is written in a clearer linear style.
+    """
     st.subheader('위치 기반 추천')
     st.text('\n')
+
+    # 1) 사용자 위치 획득
     user_location = run_location()
     if 'user_location' in st.session_state:
         user_location = st.session_state['user_location']
 
-        
-    
-    # user_location은 리스트 형태를 기대합니다:
-    # [위도, 경도, 도로명 주소, 이용하고 싶은 시설 분류]
     if user_location is None:
         st.error('사용자의 위치가 지정되지 않았습니다.')
         return
+
+    try:
+        ulat = float(user_location[0])
+        ulon = float(user_location[1])
+    except Exception:
+        st.error('전달된 사용자 위치 정보 형식이 잘못되었습니다. [lat, lon, ...] 형식을 전달하세요.')
+        return
+
+    # 2) 시설 데이터 로드 및 필터링
+    노인복지시설_df = pd.read_csv('./data/인천광역시_노인복지시설_현황.csv', encoding='euc-kr')
+    cols = [c for c in 노인복지시설_df.columns]
+    lat_col = next((c for c in cols if 'lat' in c.lower()), None)
+    lon_col = next((c for c in cols if 'lon' in c.lower() or 'lot' in c.lower()), None)
+    if lat_col is None or lon_col is None:
+        st.error('데이터에 lat/lon 컬럼이 없습니다. 파일 컬럼: ' + ','.join(cols))
+        return
+
+    selected_type = None
+    if isinstance(user_location, (list, tuple)) and len(user_location) > 3:
+        selected_type = user_location[3]
+
+    type_col = '시설유형' if '시설유형' in 노인복지시설_df.columns else 노인복지시설_df.columns[0]
+    if '시설유형' not in 노인복지시설_df.columns:
+        st.warning("'시설유형' 컬럼이 없어 자동으로 첫 번째 컬럼을 사용합니다.")
+
+    if selected_type and selected_type != '전체':
+        candidates = 노인복지시설_df[노인복지시설_df[type_col] == selected_type].copy()
     else:
-        # 읽어오기 (euc-kr 인코딩)
-        노인복지시설_df = pd.read_csv('./data/인천광역시_노인복지시설_현황.csv', encoding = 'euc-kr')
+        candidates = 노인복지시설_df.copy()
 
+    candidates = candidates.dropna(subset=[lat_col, lon_col])
+    candidates[lat_col] = candidates[lat_col].astype(float)
+    candidates[lon_col] = candidates[lon_col].astype(float)
+    if candidates.shape[0] == 0:
+        st.error('선택된 유형의 시설이 없습니다.')
+        return
 
-        # lat/lon 컬럼 인식 (파일 구조에 따라 컬럼명이 'lat','lon' 등으로 되어 있음)
-        cols = [c for c in 노인복지시설_df.columns]
-        lat_col = next((c for c in cols if 'lat' in c.lower()), None)
-        lon_col = next((c for c in cols if 'lon' in c.lower() or 'lot' in c.lower()), None)
-        if lat_col is None or lon_col is None:
-            st.error('데이터에 lat/lon 컬럼이 없습니다. 파일 컬럼: ' + ','.join(cols))
-            return
+    # 3) 거리 계산 및 최적 시설 선택
+    road_results = find_nearest_facilities((ulat, ulon), candidates, return_count=5, candidate_prefilter=20, graph_cache_path=GRAPH_CACHE_PATH)
+    if road_results is None or road_results.shape[0] == 0:
+        st.error('거리 계산 결과가 없습니다.')
+        return
+    best = road_results.iloc[0]
+    best5 = road_results.head(5)
+    st.write('데이터프레임 상위 5개')
+    st.dataframe(best5)
 
-        # app_location에서 전달한 user_location 리스트를 사용
-        # 형식: [lat, lon, 도로명주소, 선택한_시설_분류]
+    # 4) 기본 지도 생성 및 표시
+    fmap = folium.Map(location=[ulat, ulon], zoom_start=14)
+    try:
+        st.session_state['fmap'] = fmap
+    except Exception:
+        pass
+
+    # 사용자/선택 시설 마커
+    folium.Marker([ulat, ulon], popup=make_popup('사용자 위치'), icon=folium.Icon(color='blue')).add_to(fmap)
+    best_title = str(best.get(type_col, '시설')) + '<br>' + str(best.get(노인복지시설_df.columns[0], '이름'))
+    folium.Marker([best[lat_col], best[lon_col]], popup=make_popup(best_title), icon=folium.Icon(color='red')).add_to(fmap)
+
+    # 5) 경로 그리기 (osmnx 그래프가 있으면 시도, 없으면 직선 폴백)
+    draw_route_on_map(fmap, ulat, ulon, best[lat_col], best[lon_col], graph_cache_path=GRAPH_CACHE_PATH)
+
+    # 6) 부가 정보(맛집/여가시설/정류장) 표시
+    try:
+        fmap = st.session_state.get('fmap', fmap)
+    except Exception:
+        pass
+
+    select_list = ['맛집', '여가시설', '정류장']
+    selection = st.multiselect('추가적으로 사용하실 정보를 입력해주세요.', select_list)
+    facilities_location = (best[lat_col], best[lon_col])
+    try:
+        st.session_state['facilities_location'] = facilities_location
+    except Exception:
+        pass
+    facilities_location = st.session_state.get('facilities_location', facilities_location)
+
+    user_df = None
+    fac_df = None
+
+    # 맛집 마커
+    if '맛집' in selection:
         try:
-            ulat = float(user_location[0])
-            ulon = float(user_location[1])
-        except Exception:
-            st.error('전달된 사용자 위치 정보 형식이 잘못되었습니다. [lat, lon, ...] 형식을 전달하세요.')
-            return
-
-        # 사용자가 선택한 시설 분류는 인덱스 3에 위치
-        selected_type = None
-        if isinstance(user_location, (list, tuple)) and len(user_location) > 3:
-            selected_type = user_location[3]
-
-        # 컬럼명이 명확하면 고정 (요청대로 '시설유형' 사용)
-        type_col = '시설유형' if '시설유형' in 노인복지시설_df.columns else None
-        if type_col is None:
-            # 만약 없으면 첫 번째 컬럼으로 대체(안전장치)
-            st.warning("'시설유형' 컬럼이 없어 자동으로 첫 번째 컬럼을 사용합니다.")
-            type_col = 노인복지시설_df.columns[0]
-
-        # 후보 필터링: 사용자가 지정한 분류가 있으면 그 기준으로 필터
-        if selected_type and selected_type != '전체':
-            candidates = 노인복지시설_df[노인복지시설_df[type_col] == selected_type].copy()
-        else:
-            candidates = 노인복지시설_df.copy()
-
-        # lat/lon 결측 제거
-        candidates = candidates.dropna(subset=[lat_col, lon_col])
-        candidates[lat_col] = candidates[lat_col].astype(float)
-        candidates[lon_col] = candidates[lon_col].astype(float)
-
-        if candidates.shape[0] == 0:
-            st.error('선택된 유형의 시설이 없습니다.')
-            return
-
-        # 거리 계산을 별도 함수로 분리하여 사용
-        # find_nearest_facilities는 내부적으로 직선거리 기반 후보 필터링과
-        # (가능하면) 도로기반 거리를 계산하여 정렬된 결과를 반환합니다.
-        # 기본적으로 candidate_prefilter=20, return_count=5로 동작하여 기존과 동일한 동작을 유지합니다.
-        road_results = find_nearest_facilities((ulat, ulon), candidates, return_count=5, candidate_prefilter=20, graph_cache_path=GRAPH_CACHE_PATH)
-
-        # 최종 선택
-        if road_results is None or road_results.shape[0] == 0:
-            st.error('거리 계산 결과가 없습니다.')
-            return
-        best = road_results.iloc[0]
-        best5 = road_results.head(5)
-        st.write('데이터프레임 상위 5개')
-        st.dataframe(best5)
-
-        # folium map 생성
-        fmap = folium.Map(location=[ulat, ulon], zoom_start=14)
-        # 세션에 기본 맵 객체를 저장(같은 세션 내 재실행 시 참조 가능)
-        try:
-            st.session_state['fmap'] = fmap
-        except Exception:
-            # session_state에 저장 불가하면 무시
-            pass
-        # popup을 HTML로 만들어 가로 표시와 자동 줄바꿈을 적용
-        def make_popup(text, width=240):
-            # text에 '<br>'이 포함되어 있으면 적절히 분리해 각 부분을 escape 후 다시 합칩니다.
-            s = str(text)
-            if '<br>' in s:
-                parts = s.split('<br>')
-                escaped = '<br>'.join(escape(p) for p in parts)
-            else:
-                escaped = escape(s).replace('\n', '<br>')
-            html = f"""<div style='max-width:{width}px; white-space:normal; word-wrap:break-word; font-size:13px; line-height:1.2;'>{escaped}</div>"""
-            # iframe 높이를 텍스트 길이에 따라 약간 조절
-            height = 50 + max(0, (len(escaped) - width) // 3)
-            return folium.Popup(folium.IFrame(html=html, width=width+20, height=height), max_width=width+20)
-        
-        folium.Marker([ulat, ulon], popup=make_popup('사용자 위치'), icon=folium.Icon(color='blue')).add_to(fmap)
-        best_title = str(best.get(type_col, '시설')) + '<br>' + str(best.get(노인복지시설_df.columns[0], '이름'))
-        folium.Marker([best[lat_col], best[lon_col]], popup=make_popup(best_title), icon=folium.Icon(color='red')).add_to(fmap)
-
-        # 경로 polyline: osmnx 그래프 캐시가 있으면 도로 기반으로 그리되,
-        # 없거나 실패하면 항상 직선으로 fallback 하도록 안전하게 처리합니다.
-        route_drawn = False
-        if OSMNX_AVAILABLE:
-            try:
-                import os
-                import pickle
-                G = None
-                if os.path.exists(GRAPH_CACHE_PATH):
-                    with open(GRAPH_CACHE_PATH, 'rb') as fh:
-                        G = pickle.load(fh)
-                if G is not None:
-                    try:
-                        user_node = ox.nearest_nodes(G, ulon, ulat)
-                        target_node = ox.nearest_nodes(G, best[lon_col], best[lat_col])
-                        route = nx.shortest_path(G, user_node, target_node, weight='length')
-
-                        # 노드 좌표로 폴리라인을 그림
-                        try:
-                            coords = [(float(G.nodes[n]['y']), float(G.nodes[n]['x'])) for n in route]
-                            folium.PolyLine(locations=coords, color='green', weight=4, opacity=0.8).add_to(fmap)
-                            route_drawn = True
-                        except Exception:
-                            # edge geometry fallback
-                            try:
-                                edge_geoms = []
-                                for u, v in zip(route[:-1], route[1:]):
-                                    data = G.get_edge_data(u, v)
-                                    if data is None:
-                                        continue
-                                    first = next(iter(data.values()))
-                                    geom = first.get('geometry')
-                                    if geom is not None:
-                                        try:
-                                            pts = [(pt[1], pt[0]) for pt in geom.coords]
-                                            edge_geoms.extend(pts)
-                                        except Exception:
-                                            pass
-                                if edge_geoms:
-                                    folium.PolyLine(locations=edge_geoms, color='green', weight=4, opacity=0.8).add_to(fmap)
-                                    route_drawn = True
-                            except Exception:
-                                pass
-                    except Exception:
-                        # 도로 경로 계산 실패는 무시하고 직선 폴백으로 처리
-                        route_drawn = False
-            except Exception:
-                route_drawn = False
-
-        if not route_drawn:
-            try:
-                folium.PolyLine(locations=[[ulat, ulon], [best[lat_col], best[lon_col]]], color='green').add_to(fmap)
-            except Exception:
-                pass
-
-        # 추가 정보 (맛집 / 여가시설 / 정류장) 표시: 기존 함수들이 반환하면 지도에 마커를 추가
-        # 세션에 저장된 맵 객체가 있으면 그 객체를 우선 사용
-        try:
-            fmap = st.session_state.get('fmap', fmap)
-        except Exception:
-            pass
-        select_list = ['맛집', '여가시설', '정류장']
-        selection = st.multiselect('추가적으로 사용하실 정보를 입력해주세요.', select_list)
-        facilities_location = (best[lat_col], best[lon_col])
-        try:
-            st.session_state['facilities_location'] = facilities_location
-        except Exception:
-            # session_state에 저장 불가하면 무시
-            pass
-
-        facilities_location = st.session_state.get('facilities_location', facilities_location)
-
-        # nearby bus stop data placeholders (scope for later display)
-        user_df = None
-        fac_df = None
-
-        bus_request = False
-
-        if '맛집' in selection:
             temp_restaurant = around_restaurant(facilities_location)
             if isinstance(temp_restaurant, pd.DataFrame) and not temp_restaurant.empty:
                 for _, r in temp_restaurant.head(20).iterrows():
-                    if lat_col in r and lon_col in r:
+                    try:
+                        latv = float(r.get(lat_col, r.get('lat')))
+                        lonv = float(r.get(lon_col, r.get('lon')))
                         label = r.get('상호', '맛집')
-                        # 식당명 + (가능하면 주소/설명)
                         extra = ''
                         for c in ['주소','도로명 주소','소재지','상세주소']:
                             if c in r and pd.notna(r[c]):
                                 extra = r[c]
                                 break
                         popup_text = label if not extra else f"{label}<br>{extra}"
-                        folium.CircleMarker([r[lat_col], r[lon_col]], radius=4, color='orange', popup=make_popup(popup_text)).add_to(fmap)
-        if '여가시설' in selection:
+                        folium.CircleMarker([latv, lonv], radius=4, color='orange', popup=make_popup(popup_text)).add_to(fmap)
+                    except Exception:
+                        continue
+        except Exception:
+            st.warning('맛집 정보를 불러오는 중 오류가 발생했습니다.')
+
+    # 여가시설 마커
+    if '여가시설' in selection:
+        try:
             temp_leisure = around_leisure(facilities_location)
             if isinstance(temp_leisure, pd.DataFrame) and not temp_leisure.empty:
                 for _, r in temp_leisure.head(20).iterrows():
-                    if lat_col in r and lon_col in r:
+                    try:
+                        latv = float(r.get(lat_col, r.get('lat')))
+                        lonv = float(r.get(lon_col, r.get('lon')))
                         label = r.get('이름', '여가')
                         extra = ''
                         for c in ['주소','위치','설명','도로명 주소','시설분류']:
@@ -265,75 +191,76 @@ def run_map():
                                 extra = r[c]
                                 break
                         popup_text = label if not extra else f"{label}<br>{extra}"
-                        folium.CircleMarker([r[lat_col], r[lon_col]], radius=4, color='purple', popup=make_popup(popup_text)).add_to(fmap)
-        if '정류장' in selection:
+                        folium.CircleMarker([latv, lonv], radius=4, color='purple', popup=make_popup(popup_text)).add_to(fmap)
+                    except Exception:
+                        continue
+        except Exception:
+            st.warning('여가시설 정보를 불러오는 중 오류가 발생했습니다.')
+
+    # 정류장 마커 및 테이블 준비
+    bus_request = False
+    if '정류장' in selection:
+        bus_request = True
+        try:
+            temp_bus_stop = bus_stop_recommendation((ulat,ulon), facilities_location)
+        except Exception as e:
+            st.warning('정류장 추천 모듈 호출 중 오류가 발생했습니다: ' + str(e))
             temp_bus_stop = None
-            bus_request = True
+
+        if isinstance(temp_bus_stop, dict):
+            user_df = temp_bus_stop.get('user_nearby')
+            fac_df = temp_bus_stop.get('facility_nearby')
+            # 지도에 그리기
             try:
-                temp_bus_stop = bus_stop_recommendation((ulat,ulon), facilities_location)
-            except Exception as e:
-                st.warning('정류장 추천 모듈 호출 중 오류가 발생했습니다: ' + str(e))
+                if user_df is not None and hasattr(user_df, 'iterrows') and not user_df.empty:
+                    for _, r in user_df.iterrows():
+                        try:
+                            folium.CircleMarker([float(r['lat']), float(r['lon'])], radius=4, color='cadetblue', popup=make_popup(f"{r.get('정류장명','정류장')}<br>{int(r.get('dist_user_m',0))}m", width=200)).add_to(fmap)
+                        except Exception:
+                            continue
+                if fac_df is not None and hasattr(fac_df, 'iterrows') and not fac_df.empty:
+                    for _, r in fac_df.iterrows():
+                        try:
+                            folium.CircleMarker([float(r['lat']), float(r['lon'])], radius=4, color='darkblue', popup=make_popup(f"{r.get('정류장명','정류장')}<br>{int(r.get('dist_fac_m',0))}m", width=200)).add_to(fmap)
+                        except Exception:
+                            continue
+            except Exception:
+                st.warning('정류장 마커 표시 중 오류가 발생했습니다.')
+        else:
+            st.warning('정류장 정보를 불러오지 못했습니다. 모듈이 placeholder 상태일 수 있습니다.')
 
-            # 예상 반환: dict with 'user_nearby' and 'facility_nearby'
-            if not isinstance(temp_bus_stop, dict):
-                st.warning('정류장 정보를 불러오지 못했습니다. 모듈이 placeholder 상태일 수 있습니다.')
-                user_df = None
-                fac_df = None
-            else:
-                user_df = temp_bus_stop.get('user_nearby')
-                fac_df = temp_bus_stop.get('facility_nearby')
+    # 7) 지도 렌더링 및 테이블/버튼 표시
+    fmap_html = fmap._repr_html_()
+    st_html(fmap_html, height=600)
 
-            # 지도에 다른 색으로 표시 (존재 여부 체크)
-            if user_df is not None and hasattr(user_df, 'iterrows') and not user_df.empty:
-                for _, r in user_df.iterrows():
-                    try:
-                        folium.CircleMarker([float(r['lat']), float(r['lon'])], radius=4, color='cadetblue', popup=make_popup(f"{r.get('정류장명','정류장')}<br>{int(r.get('dist_user_m',0))}m", width=200)).add_to(fmap)
-                    except Exception:
-                        continue
-            if fac_df is not None and hasattr(fac_df, 'iterrows') and not fac_df.empty:
-                for _, r in fac_df.iterrows():
-                    try:
-                        folium.CircleMarker([float(r['lat']), float(r['lon'])], radius=4, color='darkblue', popup=make_popup(f"{r.get('정류장명','정류장')}<br>{int(r.get('dist_fac_m',0))}m", width=200)).add_to(fmap)
-                    except Exception:
-                        continue
-
-            # (이전에는 사이드바에 표시했으나, 사이드바가 좁아 가독성이 떨어져
-            #  지도를 아래로 출력한 뒤 본문에 근처 정류장 목록과 조회 버튼을 표시합니다.)
-
-        # 지도 출력
-        fmap_html = fmap._repr_html_()
-        st_html(fmap_html, height=600)
-
-        # 지도 아래에 근처 정류장 정보 및 버튼을 표시합니다 (사이드바 대신)
-        if bus_request: 
-            st.markdown('### 근처 정류장 (사용자 / 시설)')
-            with st.expander('사용자 근처 정류장'):
-                if user_df is not None and hasattr(user_df, 'head'):
-                    try:
-                        st.dataframe(user_df[['정류장명', '행정동명', 'dist_user_m']].rename(columns={'dist_user_m': '거리(m)'}))
-                    except Exception:
-                        st.write('사용자 근처 정류장 정보를 표시할 수 없습니다.')
-                else:
-                    st.write('사용자 근처 정류장 정보가 없습니다.')
-
-            with st.expander('시설 근처 정류장'):
-                if fac_df is not None and hasattr(fac_df, 'head'):
-                    try:
-                        st.dataframe(fac_df[['정류장명', '행정동명', 'dist_fac_m']].rename(columns={'dist_fac_m': '거리(m)'}))
-                    except Exception:
-                        st.write('시설 근처 정류장 정보를 표시할 수 없습니다.')
-                else:
-                    st.write('시설 근처 정류장 정보가 없습니다.')
-
-            # 버스 노선 조회 버튼 (본체 영역)
-            if st.button('해당 정류장들로 가는 버스 노선 조회'):
+    if bus_request:
+        st.markdown('### 근처 정류장 (사용자 / 시설)')
+        with st.expander('사용자 근처 정류장'):
+            if user_df is not None and hasattr(user_df, 'head'):
                 try:
-                    routes = check_bus_route({'user': user_df, 'facility': fac_df})
-                    if routes:
-                        st.write('조회된 노선:')
-                        st.json(routes)
-                    else:
-                        st.info('버스 노선 데이터가 없거나 해당 정류장에 대한 노선 정보를 찾을 수 없습니다.')
-                except Exception as e:
-                    st.error('버스 노선 조회 중 오류: ' + str(e))
+                    st.dataframe(user_df[['정류장명', '행정동명', 'dist_user_m']].rename(columns={'dist_user_m': '거리(m)'}))
+                except Exception:
+                    st.write('사용자 근처 정류장 정보를 표시할 수 없습니다.')
+            else:
+                st.write('사용자 근처 정류장 정보가 없습니다.')
+
+        with st.expander('시설 근처 정류장'):
+            if fac_df is not None and hasattr(fac_df, 'head'):
+                try:
+                    st.dataframe(fac_df[['정류장명', '행정동명', 'dist_fac_m']].rename(columns={'dist_fac_m': '거리(m)'}))
+                except Exception:
+                    st.write('시설 근처 정류장 정보를 표시할 수 없습니다.')
+            else:
+                st.write('시설 근처 정류장 정보가 없습니다.')
+
+        if st.button('해당 정류장들로 가는 버스 노선 조회'):
+            try:
+                routes = check_bus_route({'user': user_df, 'facility': fac_df})
+                if routes:
+                    st.write('조회된 노선:')
+                    st.json(routes)
+                else:
+                    st.info('버스 노선 데이터가 없거나 해당 정류장에 대한 노선 정보를 찾을 수 없습니다.')
+            except Exception as e:
+                st.error('버스 노선 조회 중 오류: ' + str(e))
     

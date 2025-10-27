@@ -131,7 +131,7 @@ def check_bus_route(bus_dic, api_key=None):
 
     # 엔드포인트 후보들 (정류장 -> 노선 조회에 유용한 후보들을 우선 포함)
     # 일부 공공데이터 API는 서비스명/경로가 다르므로 여러 후보를 순차 시도합니다.
-    endpoints = [
+    ENDPOINTS = [
         # 인천/일반 정류장 기반 노선조회(널리 사용되는 이름)
         ('getSttnAcctoThrghRouteList', 'http://apis.data.go.kr/1613000/BusSttnInfoInqireService/getSttnAcctoThrghRouteList'),
         ('getSttnAcctoThrghRouteList_https', 'https://apis.data.go.kr/1613000/BusSttnInfoInqireService/getSttnAcctoThrghRouteList'),
@@ -140,6 +140,37 @@ def check_bus_route(bus_dic, api_key=None):
         ('MOLIT_getRouteInfoItem', 'https://apis.data.go.kr/1613000/BusRoute/getRouteInfoItem'),
         ('MOLIT_getBusRouteList', 'https://apis.data.go.kr/1613000/BusRoute/getBusRouteList'),
     ]
+
+    def _build_param_candidates(ename, base, sid, name, key):
+        """Return a list of candidate param dicts to try for given endpoint.
+
+        This centralizes the heuristics for different API styles.
+        """
+        param_candidates = []
+        if 'sttn' in ename.lower() or 'sttn' in base.lower() or 'station' in ename.lower():
+            if sid is not None and str(sid) != '':
+                param_candidates.extend([
+                    {'serviceKey': key, 'arsId': sid, '_type': 'json'},
+                    {'serviceKey': key, 'sttnId': sid, '_type': 'json'},
+                    {'ServiceKey': key, 'arsId': sid},
+                    {'ServiceKey': key, 'sttnId': sid},
+                ])
+            if name is not None and name != 'None':
+                param_candidates.extend([
+                    {'serviceKey': key, 'sttnNm': name, '_type': 'json'},
+                    {'ServiceKey': key, 'sttnNm': name},
+                ])
+            param_candidates = [dict(p, **({'dataType': 'JSON'} if '_type' not in p else {})) for p in param_candidates]
+        else:
+            if sid is not None and str(sid) != '':
+                param_candidates.extend([
+                    {'serviceKey': key, 'rte_id': sid, 'dataType': 'JSON'},
+                    {'serviceKey': key, 'routeId': sid, 'dataType': 'JSON'},
+                    {'ServiceKey': key, 'rte_id': sid},
+                ])
+            if name is not None and name != 'None':
+                param_candidates.append({'serviceKey': key, 'routeNo': name, 'dataType': 'JSON'})
+        return param_candidates
 
     for side in ('user', 'facility'):
         stops = _iter_stops(bus_dic.get(side) if isinstance(bus_dic, dict) else None)
@@ -152,40 +183,9 @@ def check_bus_route(bus_dic, api_key=None):
                 out[side][stop_key] = []
                 continue
             # try endpoints
-            for ename, base in endpoints:
-                # build a set of candidate param dicts for this endpoint
-                param_candidates = []
-
-                # heuristics: 정류장 기반 엔드포인트명에는 'Sttn' 또는 'sttn'이 포함되는 경우가 많음
-                if 'sttn' in ename.lower() or 'sttn' in base.lower() or 'station' in ename.lower():
-                    # 정류장 ID(arsId, sttnId 등) 우선
-                    if sid is not None and str(sid) != '':
-                        param_candidates.extend([
-                            {'serviceKey': key, 'arsId': sid, '_type': 'json'},
-                            {'serviceKey': key, 'sttnId': sid, '_type': 'json'},
-                            {'ServiceKey': key, 'arsId': sid},
-                            {'ServiceKey': key, 'sttnId': sid},
-                        ])
-                    # 이름 기반 파라미터 후보
-                    if name is not None and name != 'None':
-                        param_candidates.extend([
-                            {'serviceKey': key, 'sttnNm': name, '_type': 'json'},
-                            {'ServiceKey': key, 'sttnNm': name},
-                        ])
-                    # 일부 엔드포인트는 dataType=JSON을 요구
-                    param_candidates = [dict(p, **({'dataType': 'JSON'} if '_type' not in p else {})) for p in param_candidates]
-
-                else:
-                    # 노선/route 관련 엔드포인트 후보
-                    if sid is not None and str(sid) != '':
-                        # 주의: 여기서 sid가 실제로는 정류장 ID일 수 있으므로 노선 API에서 유효하지 않을 수 있음
-                        param_candidates.extend([
-                            {'serviceKey': key, 'rte_id': sid, 'dataType': 'JSON'},
-                            {'serviceKey': key, 'routeId': sid, 'dataType': 'JSON'},
-                            {'ServiceKey': key, 'rte_id': sid},
-                        ])
-                    if name is not None and name != 'None':
-                        param_candidates.append({'serviceKey': key, 'routeNo': name, 'dataType': 'JSON'})
+            for ename, base in ENDPOINTS:
+                # 시도할 파라미터 후보 목록 생성
+                param_candidates = _build_param_candidates(ename, base, sid, name, key)
 
                 # 시도
                 tried_any = False

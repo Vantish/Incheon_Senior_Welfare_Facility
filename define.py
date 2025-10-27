@@ -108,3 +108,157 @@ def find_nearest_facilities(user_location, facilities_df: pd.DataFrame, return_c
     # road_dist_m 기준으로 정렬하고 return_count개 반환
     road_results_sorted = road_results.sort_values('road_dist_m', ascending=True).reset_index(drop=True)
     return road_results_sorted.head(return_count if return_count is not None else len(road_results_sorted))
+
+
+def make_popup(text, width=240):
+    """Create a folium.Popup with safe escaping and simple line-wrapping.
+
+    Returns a folium.Popup ready to add to a map.
+    """
+    s = str(text)
+    if '<br>' in s:
+        parts = s.split('<br>')
+        escaped = '<br>'.join(escape(p) for p in parts)
+    else:
+        escaped = escape(s).replace('\n', '<br>')
+    html = f"""<div style='max-width:{width}px; white-space:normal; word-wrap:break-word; font-size:13px; line-height:1.2;'>{escaped}</div>"""
+    height = 50 + max(0, (len(escaped) - width) // 3)
+    return folium.Popup(folium.IFrame(html=html, width=width+20, height=height), max_width=width+20)
+
+
+def draw_route_on_map(fmap, ulat, ulon, target_lat, target_lon, graph_cache_path: str = GRAPH_CACHE_PATH):
+    """Try to draw a road-based route on fmap using cached osmnx graph.
+
+    If osmnx/graph not available or routing fails, draws a straight line instead.
+    Returns True if road-based route was drawn, False if straight-line fallback used (or nothing drawn).
+    """
+    # prefer using installed osmnx if available
+    if _OSM:
+        try:
+            G = None
+            if os.path.exists(graph_cache_path):
+                with open(graph_cache_path, 'rb') as fh:
+                    G = pickle.load(fh)
+            if G is not None:
+                try:
+                    user_node = ox.nearest_nodes(G, ulon, ulat)
+                    target_node = ox.nearest_nodes(G, target_lon, target_lat)
+                    route = nx.shortest_path(G, user_node, target_node, weight='length')
+                    # try node coords first
+                    try:
+                        coords = [(float(G.nodes[n]['y']), float(G.nodes[n]['x'])) for n in route]
+                        folium.PolyLine(locations=coords, color='green', weight=4, opacity=0.8).add_to(fmap)
+                        return True
+                    except Exception:
+                        # fall back to edge geometry if present
+                        edge_geoms = []
+                        for u, v in zip(route[:-1], route[1:]):
+                            data = G.get_edge_data(u, v)
+                            if data is None:
+                                continue
+                            first = next(iter(data.values()))
+                            geom = first.get('geometry')
+                            if geom is not None:
+                                try:
+                                    pts = [(pt[1], pt[0]) for pt in geom.coords]
+                                    edge_geoms.extend(pts)
+                                except Exception:
+                                    pass
+                        if edge_geoms:
+                            folium.PolyLine(locations=edge_geoms, color='green', weight=4, opacity=0.8).add_to(fmap)
+                            return True
+                except Exception:
+                    # routing failed
+                    pass
+        except Exception:
+            pass
+
+    # fallback: straight line
+    try:
+        folium.PolyLine(locations=[[ulat, ulon], [target_lat, target_lon]], color='green').add_to(fmap)
+    except Exception:
+        return False
+    return False
+
+
+def _find_lat_lon_cols(df):
+    """Return (lat_col, lon_col) names if found, else (None, None). Tries common variations."""
+    if df is None or df.shape[0] == 0:
+        return None, None
+    cols = list(df.columns)
+    low = [c.lower() for c in cols]
+    lat_candidates = ['lat', '위도', 'latitude']
+    lon_candidates = ['lon', 'lot', '경도', 'longitude', 'lng']
+    lat_col = None
+    lon_col = None
+    for i, c in enumerate(low):
+        if lat_col is None and any(k in c for k in lat_candidates):
+            lat_col = cols[i]
+        if lon_col is None and any(k in c for k in lon_candidates):
+            lon_col = cols[i]
+        if lat_col and lon_col:
+            break
+    if lat_col is None and '위도' in cols:
+        lat_col = '위도'
+    if lon_col is None and '경도' in cols:
+        lon_col = '경도'
+    return lat_col, lon_col
+
+
+def _ensure_coord_aliases(df, src_lat, src_lon):
+    """Create standardized coordinate columns and common aliases. Returns a copy."""
+    df = df.copy()
+    try:
+        df['lat'] = pd.to_numeric(df[src_lat].astype(str).str.replace(',', '').str.strip(), errors='coerce')
+    except Exception:
+        df['lat'] = pd.NA
+    try:
+        df['lon'] = pd.to_numeric(df[src_lon].astype(str).str.replace(',', '').str.strip(), errors='coerce')
+    except Exception:
+        df['lon'] = pd.NA
+    aliases_lat = ['위도', 'latitude', 'LAT', 'Lat']
+    aliases_lon = ['경도', 'longitude', 'LON', 'Lon', 'lot']
+    for a in aliases_lat:
+        if a not in df.columns:
+            df[a] = df['lat']
+    for a in aliases_lon:
+        if a not in df.columns:
+            df[a] = df['lon']
+    return df
+
+
+def _pick_first_column(df, candidates):
+    for c in candidates:
+        if c in df.columns:
+            return c
+    return None
+
+
+def _standardize_restaurant_columns(df):
+    df = df.copy()
+    name_candidates = ['상호', '상호명', '업소명', '식당명', '업체명', '사업장명']
+    addr_candidates = ['도로명 주소', '도로명주소', '주소', '소재지', '지번주소']
+    name_col = _pick_first_column(df, name_candidates)
+    if name_col and '상호' not in df.columns:
+        df['상호'] = df[name_col]
+    addr_col = _pick_first_column(df, addr_candidates)
+    if addr_col and '도로명 주소' not in df.columns:
+        df['도로명 주소'] = df[addr_col]
+    return df
+
+
+def _standardize_leisure_columns(df):
+    df = df.copy()
+    name_candidates = ['이름', '시설명', '명칭']
+    addr_candidates = ['도로명 주소', '도로명주소', '주소', '위치']
+    type_candidates = ['시설분류', '종류', '구분']
+    name_col = _pick_first_column(df, name_candidates)
+    if name_col and '이름' not in df.columns:
+        df['이름'] = df[name_col]
+    addr_col = _pick_first_column(df, addr_candidates)
+    if addr_col and '도로명 주소' not in df.columns:
+        df['도로명 주소'] = df[addr_col]
+    type_col = _pick_first_column(df, type_candidates)
+    if type_col and '시설분류' not in df.columns:
+        df['시설분류'] = df[type_col]
+    return df
