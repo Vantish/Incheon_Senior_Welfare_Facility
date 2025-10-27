@@ -103,7 +103,7 @@ def bus_stop_recommendation(user_location, facilities_location, n_neighbors=10):
             facility_stops = []
 
     # --- DataFrame 생성과 컬럼 정렬 ---
-    user_columns = ['lat', 'lon', '정류장명', '행정동명','정류장ID,' 'dist_user_m']
+    user_columns = ['lat', 'lon', '정류장명', '행정동명','정류장ID', 'dist_user_m']
     fac_columns = ['lat', 'lon', '정류장명', '행정동명','정류장ID', 'dist_fac_m']
 
     user_df = pd.DataFrame(user_stops, columns=user_columns)
