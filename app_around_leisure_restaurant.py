@@ -1,14 +1,7 @@
 import pandas as pd
 import streamlit as st
-import os
 from app_location import run_location
 from geopy.distance import geodesic
-import folium
-import streamlit.components.v1 as components
-from html import escape
-
-
-
 
 
 # app_location 부분에서 입력받은 사용자의 위치정보를 통해
@@ -16,21 +9,9 @@ from html import escape
 # 시설에서 가장 가까운 식당 / 여가시설을 20개씩 반환합니다.
 
 
-def _load_csv(path, encodings=("euc-kr", "cp949", "utf-8")):
-	"""Try multiple encodings and return a DataFrame or empty DataFrame on failure."""
-	if not os.path.exists(path):
-		return pd.DataFrame()
-	for enc in encodings:
-		try:
-			return pd.read_csv(path, encoding=enc, on_bad_lines='skip')
-		except Exception:
-			continue
-	return pd.DataFrame()
-
-
-# 데이터 로드 (상대 경로 사용)
-맛집_df = _load_csv("./data/인천광역시 식당 현황.csv")
-시설_df = _load_csv("./data/인천광역시 시설 현황.csv")
+# 맛집/시설 데이터
+맛집_df = pd.read_csv('./data/인천광역시 식당 현황.csv', encoding='euc-kr')
+시설_df = pd.read_csv('./data/인천광역시 시설 현황.csv', encoding='CP949')
 
 
 def _find_lat_lon_cols(df):
@@ -241,101 +222,6 @@ if __name__ == '__main__':
 		st.info("app_location.py의 run_location()이 위치를 반환해야 합니다.")
 
 
-def _make_popup_html(text, width=240):
-	s = str(text)
-	if '<br>' in s:
-		parts = s.split('<br>')
-		escaped = '<br>'.join(escape(p) for p in parts)
-	else:
-		escaped = escape(s).replace('\n', '<br>')
-	html = f"""<div style='max-width:{width}px; white-space:normal; word-wrap:break-word; font-size:13px; line-height:1.2;'>{escaped}</div>"""
-	height = 50 + max(0, (len(escaped) - width) // 3)
-	return folium.Popup(folium.IFrame(html=html, width=width+20, height=height), max_width=width+20)
-
-
-def show_nearby_map(facilities_location, show_restaurant=True, show_leisure=True, zoom_start=14, map_height=600):
-	"""Create a folium map centered at facilities_location and add markers for nearby restaurants and leisure facilities.
-
-	Returns the HTML representation embedded into Streamlit.
-	"""
-	if facilities_location is None:
-		st.warning('시설 위치가 지정되지 않았습니다.')
-		return
-	try:
-		base_lat = float(facilities_location[0])
-		base_lon = float(facilities_location[1])
-	except Exception:
-		st.warning('facilities_location 형식이 잘못되었습니다. (lat, lon)을 전달하세요.')
-		return
-
-	fmap = folium.Map(location=[base_lat, base_lon], zoom_start=zoom_start)
-
-	# 사용자/시설 중심 마커
-	folium.Marker([base_lat, base_lon], popup=_make_popup_html('시설 위치'), icon=folium.Icon(color='red')).add_to(fmap)
-
-	# add restaurants
-	if show_restaurant:
-		try:
-			r_df = around_restaurant(facilities_location)
-			if isinstance(r_df, pd.DataFrame) and not r_df.empty:
-				for _, r in r_df.iterrows():
-					try:
-						rlat = float(r.get('lat') if 'lat' in r else r.get('위도', r.get('latitude')))
-						rlon = float(r.get('lon') if 'lon' in r else r.get('경도', r.get('longitude', r.get('lot'))))
-					except Exception:
-						continue
-					name = r.get('상호', r.get('식당명', '맛집'))
-					addr = r.get('도로명 주소', '')
-					dist = r.get('거리(km)', None)
-					popup_text = name
-					if addr and not pd.isna(addr):
-						popup_text += f"<br>{addr}"
-					if dist and not pd.isna(dist):
-						popup_text += f"<br>{float(dist):.2f} km"
-					folium.CircleMarker([rlat, rlon], radius=4, color='orange', popup=_make_popup_html(popup_text)).add_to(fmap)
-		except Exception as e:
-			st.warning('맛집 표시 중 오류: ' + str(e))
-
-	# add leisure facilities
-	if show_leisure:
-		try:
-			l_df = around_leisure(facilities_location)
-			if isinstance(l_df, pd.DataFrame) and not l_df.empty:
-				for _, r in l_df.iterrows():
-					try:
-						rlat = float(r.get('lat') if 'lat' in r else r.get('위도', r.get('latitude')))
-						rlon = float(r.get('lon') if 'lon' in r else r.get('경도', r.get('longitude', r.get('lot'))))
-					except Exception:
-						continue
-					name = r.get('이름', r.get('시설명', '여가시설'))
-					addr = r.get('도로명 주소', '')
-					typ = r.get('시설분류', r.get('종류', ''))
-					dist = r.get('거리(km)', None)
-					popup_text = name
-					if typ and not pd.isna(typ):
-						popup_text += f"<br>{typ}"
-					if addr and not pd.isna(addr):
-						popup_text += f"<br>{addr}"
-					if dist and not pd.isna(dist):
-						popup_text += f"<br>{float(dist):.2f} km"
-					folium.CircleMarker([rlat, rlon], radius=4, color='purple', popup=_make_popup_html(popup_text)).add_to(fmap)
-		except Exception as e:
-			st.warning('여가시설 표시 중 오류: ' + str(e))
-
-	# legend (simple)
-	legend_html = '''
-	 <div style="position: fixed; bottom: 50px; left: 50px; width:140px; height:80px; z-index:9999; font-size:12px;">
-	  <div style="background:white; padding:6px; border:1px solid grey;">
-		<b>범례</b><br>
-		<i style="background:orange; width:10px; height:10px; display:inline-block; margin-right:6px;"></i>맛집<br>
-		<i style="background:purple; width:10px; height:10px; display:inline-block; margin-right:6px;"></i>여가시설
-	  </div>
-	 </div>
-	'''
-	fmap.get_root().html.add_child(folium.Element(legend_html))
-
-	fmap_html = fmap._repr_html_()
-	components.html(fmap_html, height=map_height)
 	
     
 
