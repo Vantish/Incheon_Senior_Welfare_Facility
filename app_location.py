@@ -61,5 +61,6 @@ def run_location():
 
     lis = [lat, lon, address, selected_type]  # 위도, 경도, 주소, 선택한 시설유형
     if st.button('입력'):
+        st.session_state['user_location'] = lis
         return lis
     return None
