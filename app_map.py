@@ -156,7 +156,7 @@ def run_map():
             # iframe 높이를 텍스트 길이에 따라 약간 조절
             height = 50 + max(0, (len(escaped) - width) // 3)
             return folium.Popup(folium.IFrame(html=html, width=width+20, height=height), max_width=width+20)
-
+        
         folium.Marker([ulat, ulon], popup=make_popup('사용자 위치'), icon=folium.Icon(color='blue')).add_to(fmap)
         best_title = str(best.get(type_col, '시설')) + '<br>' + str(best.get(노인복지시설_df.columns[0], '이름'))
         folium.Marker([best[lat_col], best[lon_col]], popup=make_popup(best_title), icon=folium.Icon(color='red')).add_to(fmap)
