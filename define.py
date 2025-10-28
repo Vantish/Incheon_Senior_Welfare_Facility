@@ -2,8 +2,12 @@ import numpy as np
 import pandas as pd
 import folium
 from streamlit.components.v1 import html as st_html
+import streamlit as st
 import math
+from datetime import datetime
 from html import escape
+import requests
+import xml.etree.ElementTree as ET
 
 # 그래프 캐시 파일 이름
 GRAPH_CACHE_PATH = './incheon_graph.pkl'
@@ -262,3 +266,257 @@ def _standardize_leisure_columns(df):
     if type_col and '시설분류' not in df.columns:
         df['시설분류'] = df[type_col]
     return df
+
+# ----------------------------------------------------------------------------------
+# 로컬 CSV 기반 버스 노선 유틸
+# - 원본 CSV: ./data/버스노선.csv (사용자가 제공)
+# - 핵심 목적: 정류소 ID(예: '정류소 번호')로 노선 목록을 조회하고,
+#   노선 -> 정류장 순서(있다면)도 인덱싱하여 경로 탐색을 단순화합니다.
+# 사용 예시:
+#   df = load_busroute_csv()
+#   stop_to_routes, route_to_stops = build_busroute_index(df)
+# ----------------------------------------------------------------------------------
+
+
+def load_busroute_csv(path: str = './data/버스노선.csv') -> pd.DataFrame:
+    """CSV 파일을 읽어 DataFrame으로 반환합니다. 실패 시 빈 DataFrame 반환."""
+    try:
+        df = pd.read_csv(path, dtype=str)
+        df.columns = [c.strip() for c in df.columns]
+        return df
+    except Exception:
+        return pd.DataFrame()
+
+
+def build_busroute_index(df: pd.DataFrame):
+    """DataFrame에서 두 인덱스 생성:
+    - stop_to_routes: {정류소ID: set(노선번호,...)}
+    - route_to_stops: {노선번호: [정류소ID, ...]}
+
+    컬럼 자동 감지는 다음 후보 이름들을 확인합니다.
+    """
+    stop_id_cols = ['정류소 번호', '정류소번호', '정류소_id', 'arsId', '정류장ID', '정류소아이디', '정류장 id']
+    route_no_cols = ['노선번호', '버스번호', 'route', 'routeNo', '노선']
+    seq_cols = ['순번', '정류장순번', 'stop_seq', 'seq', '순서', '정류소순번']
+
+    cols = [c for c in df.columns]
+    stop_col = next((c for c in cols if c in stop_id_cols or any(k in c for k in stop_id_cols)), None)
+    route_col = next((c for c in cols if c in route_no_cols or any(k in c for k in route_no_cols)), None)
+    seq_col = next((c for c in cols if c in seq_cols or any(k in c for k in seq_cols)), None)
+
+    stop_to_routes = {}
+    route_to_stops = {}
+
+    if df is None or df.empty or stop_col is None or route_col is None:
+        return stop_to_routes, route_to_stops
+
+    # normalize strings
+    df2 = df.copy()
+    df2[stop_col] = df2[stop_col].astype(str).str.strip()
+    df2[route_col] = df2[route_col].astype(str).str.strip()
+
+    # group by route to build ordered stop lists when seq_col exists
+    if seq_col and seq_col in df2.columns:
+        try:
+            df2[seq_col] = pd.to_numeric(df2[seq_col], errors='coerce')
+        except Exception:
+            df2[seq_col] = None
+
+    for _, row in df2.iterrows():
+        sid = row.get(stop_col)
+        rno = row.get(route_col)
+        if pd.isna(sid) or pd.isna(rno):
+            continue
+        sid = str(sid).strip()
+        rno = str(rno).strip()
+        stop_to_routes.setdefault(sid, set()).add(rno)
+        route_to_stops.setdefault(rno, []).append((row.get(seq_col) if seq_col in row.index else None, sid))
+
+    # 정렬: seq가 있으면 seq 기준 정렬 후 sid 리스트로 변환
+    for rno, seq_sid_list in list(route_to_stops.items()):
+        # seq_sid_list: list of (seq, sid)
+        if any(x[0] is not None for x in seq_sid_list):
+            seq_sorted = sorted([x for x in seq_sid_list if x[0] is not None], key=lambda t: (t[0] if t[0] is not None else 1e9))
+            sids = [sid for _, sid in seq_sorted]
+        else:
+            # seq 정보 없으면 입력 순서를 유지한 sid만
+            sids = [sid for _, sid in seq_sid_list]
+        route_to_stops[rno] = sids
+
+    return stop_to_routes, route_to_stops
+
+
+# 유틸: 다양한 자료형을 안전하게 파이썬 리스트로 변환
+def to_pylist(x):
+    """pandas/numpy/list/tuple/set/단일값 등을 안전하게 python list로 변환합니다.
+
+    - DataFrame -> records (list of dict)
+    - Series / ndarray -> list
+    - list/tuple/set -> list
+    - None -> []
+    - 그 외 단일값 -> [value]
+    """
+    try:
+        if isinstance(x, pd.DataFrame):
+            return x.to_dict(orient='records')
+    except Exception:
+        pass
+    try:
+        if isinstance(x, (pd.Series, np.ndarray)):
+            return list(x)
+    except Exception:
+        pass
+    if isinstance(x, (list, tuple, set)):
+        return list(x)
+    if x is None:
+        return []
+    return [x]
+
+
+def extract_stop_list(obj) -> list:
+    """입력으로 주어지는 정류장 객체에서 (name, stop_id) 튜플 리스트를 반환.
+    - obj가 DataFrame이면 컬럼 후보를 찾아 추출
+    - obj가 list/tuple이면 항목별로 처리
+    """
+    out = []
+    if obj is None:
+        return out
+    # DataFrame 처리
+    if isinstance(obj, pd.DataFrame):
+        cols = list(obj.columns)
+        id_candidates = ['정류소 번호', '정류소번호', '정류장ID', '정류소아이디', 'arsId', 'id', 'ID']
+        name_candidates = ['정류소명', '정류장명', '정류소 명', '정류장 명', '정류소']
+        id_col = next((c for c in cols if c in id_candidates or any(k in c for k in id_candidates)), None)
+        name_col = next((c for c in cols if c in name_candidates or any(k in c for k in name_candidates)), None)
+        for _, r in obj.iterrows():
+            sid = None
+            name = None
+            if id_col and id_col in r.index:
+                sid = r[id_col]
+            # fallback key names
+            if sid is None:
+                for k in id_candidates:
+                    if k in r.index:
+                        sid = r[k]
+                        break
+            if name_col and name_col in r.index:
+                name = r[name_col]
+            if name is None:
+                for k in name_candidates:
+                    if k in r.index:
+                        name = r[k]
+                        break
+            out.append((str(name) if name is not None else '', str(sid) if sid is not None else ''))
+        return out
+
+    # list / tuple 처리
+    if isinstance(obj, (list, tuple)):
+        for it in obj:
+            if isinstance(it, (list, tuple)) and len(it) >= 2:
+                out.append((str(it[0]), str(it[1])))
+            else:
+                out.append((str(it), ''))
+        return out
+
+    # 단일 값
+    out.append((str(obj), ''))
+    return out
+
+
+def normalize_routes_output(routes_obj) -> dict:
+    """Normalize various possible outputs from check_bus_route into a strict dict of plain Python types.
+
+    Returned schema:
+      {
+        '사용자 근처': { '<stop>': ['route1','route2', ...], ... },
+        '시설 근처': { '<stop>': ['route1', ...], ... },
+        'direct_routes': ['routeA', ...],
+        'direct_connections': [ {'route':r, 'user_stop':u, 'facility_stop':f}, ... ]
+      }
+
+    This function accepts dict-like inputs or other types and will coercively convert
+    DataFrame / Series / ndarray / list / tuple / set into lists of strings where
+    appropriate. The goal is to make the consumer code free from pandas objects so
+    boolean checks like `if x:` won't accidentally evaluate a DataFrame.
+    """
+    out = {'사용자 근처': {}, '시설 근처': {}, 'direct_routes': [], 'direct_connections': []}
+
+    if not isinstance(routes_obj, dict):
+        return out
+
+    # helper to coerce a value into list of route-strings
+    def _to_route_strings(v):
+        items = to_pylist(v)
+        result = []
+        for it in items:
+            if it is None:
+                continue
+            try:
+                if isinstance(it, (pd.DataFrame, pd.Series)):
+                    recs = it.to_dict(orient='records') if isinstance(it, pd.DataFrame) else list(it)
+                    for r in to_pylist(recs):
+                        s = str(r).strip()
+                        if s:
+                            result.append(s)
+                    continue
+            except Exception:
+                pass
+
+            if isinstance(it, dict):
+                found = None
+                for key in ('노선번호', '버스번호', 'route', 'routeNo', '노선'):
+                    if key in it and it[key] is not None and str(it[key]).strip() != '':
+                        found = str(it[key]).strip()
+                        break
+                if found is not None:
+                    result.append(found)
+                else:
+                    s = str(it).strip()
+                    if s:
+                        result.append(s)
+            else:
+                s = str(it).strip()
+                if s:
+                    result.append(s)
+        return result
+
+    # 사용자 근처 / 시설 근처 - allow English fallback keys
+    user_keys = ('사용자 근처', 'user', 'user_nearby', 'user_stops')
+    fac_keys = ('시설 근처', 'facility', 'facility_nearby', 'facility_stops')
+
+    user_src = None
+    fac_src = None
+    for k in user_keys:
+        if k in routes_obj:
+            user_src = routes_obj.get(k)
+            break
+    for k in fac_keys:
+        if k in routes_obj:
+            fac_src = routes_obj.get(k)
+            break
+
+    if isinstance(user_src, dict):
+        for stop, v in user_src.items():
+            out['사용자 근처'][str(stop)] = _to_route_strings(v)
+
+    if isinstance(fac_src, dict):
+        for stop, v in fac_src.items():
+            out['시설 근처'][str(stop)] = _to_route_strings(v)
+
+    # direct_routes
+    direct = routes_obj.get('direct_routes') or routes_obj.get('direct') or []
+    out['direct_routes'] = [str(x).strip() for x in to_pylist(direct) if str(x).strip()]
+
+    # direct_connections: ensure each dict has string fields
+    dc = to_pylist(routes_obj.get('direct_connections', []))
+    normalized_dc = []
+    for item in dc:
+        if not isinstance(item, dict):
+            continue
+        r = str(item.get('route') or item.get('노선') or '').strip()
+        u = str(item.get('user_stop') or item.get('사용자 근처') or '').strip()
+        f = str(item.get('facility_stop') or item.get('시설 근처') or '').strip()
+        normalized_dc.append({'route': r, 'user_stop': u, 'facility_stop': f})
+    out['direct_connections'] = normalized_dc
+
+    return out
