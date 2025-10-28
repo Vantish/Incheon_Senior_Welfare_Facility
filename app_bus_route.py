@@ -108,11 +108,11 @@ def check_bus_route(bus_dic, api_key=None):
                 for _, r in obj.iterrows():
                     name = None
                     sid = None
-                    for c in ('정류소아이디', '정류소 아이디', '정류소아이', '정류소번호', '정류소 번호', '정류장id', 'id'):
+                    for c in ('정류소아이디', '정류소 아이디', '정류소ID', '정류소번호', '정류소 번호', '정류장ID', 'id'):
                         if c in r.index:
                             sid = r[c]
                             break
-                    for c in ('정류소 명', '정류소명', '정류장명', '정류소', '정류소 명'):
+                    for c in ('정류소 명', '정류소명', '정류장명', '정류장 명', ):
                         if c in r.index:
                             name = r[c]
                             break
@@ -219,3 +219,6 @@ def check_bus_route(bus_dic, api_key=None):
             out[side][stop_key] = list(dict.fromkeys([str(r) for r in (routes or [])]))
 
     return out
+
+
+
