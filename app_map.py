@@ -4,7 +4,7 @@ from app_bus_route import check_bus_route
 from app_around_leisure_restaurant import around_leisure
 from app_around_leisure_restaurant import around_restaurant
 from app_location import run_location
-from define import find_nearest_facilities, make_popup, draw_route_on_map
+from define import find_nearest_facilities, make_popup, draw_route_on_map, to_pylist, normalize_routes_output, extract_stop_list
 
 import numpy as np
 import pandas as pd
@@ -254,13 +254,66 @@ def run_map():
                 st.write('시설 근처 정류장 정보가 없습니다.')
 
         if st.button('해당 정류장들로 가는 버스 노선 조회'):
+            # 간단한 CSV 기반 매칭 결과를 표 형태로 보여줍니다.
+            # 반환값 형태(예시):
+            # {
+            #   'user': {정류장키: [노선,...], ...},
+            #   'facility': {...},
+            #   'direct_routes': ['노선A',...],
+            #   'direct_connections': [{'route':r,'user_stop':u,'facility_stop':f}, ...]
+            # }
             try:
-                routes = check_bus_route({'user': user_df, 'facility': fac_df})
-                if routes:
-                    st.write('조회된 노선:')
-                    st.json(routes)
+                # convert user/fac dataframes into simple stop lists before calling check_bus_route
+                user_stops_input = extract_stop_list(user_df) if user_df is not None else []
+                fac_stops_input = extract_stop_list(fac_df) if fac_df is not None else []
+
+                routes = check_bus_route({'user': user_stops_input, 'facility': fac_stops_input})
+                # normalize everything into plain Python types (lists of strings)
+                routes = normalize_routes_output(routes)
+                import pandas as _pd
+
+                # coerce values to lists of strings (extra defensive normalization)
+                raw_user_side = routes.get('사용자 근처', {})
+                raw_fac_side = routes.get('시설 근처', {})
+                user_side = {str(k): [str(x).strip() for x in to_pylist(v) if str(x).strip()] for k, v in raw_user_side.items()} if isinstance(raw_user_side, dict) else {}
+                fac_side = {str(k): [str(x).strip() for x in to_pylist(v) if str(x).strip()] for k, v in raw_fac_side.items()} if isinstance(raw_fac_side, dict) else {}
+
+                # 정류장->버스 목록을 버스->정류장 집합으로 뒤집기
+                merged = {}
+                for stop, buslist in user_side.items():
+                    for b in to_pylist(buslist):
+                        rno = str(b).strip()
+                        if rno == '':
+                            continue
+                        merged.setdefault(rno, {'사용자 근처 정류소': set(), '시설 근처 정류소': set()})
+                        merged[rno]['사용자 근처 정류소'].add(str(stop))
+
+                for stop, buslist in fac_side.items():
+                    for b in to_pylist(buslist):
+                        rno = str(b).strip()
+                        if rno == '':
+                            continue
+                        merged.setdefault(rno, {'사용자 근처 정류소': set(), '시설 근처 정류소': set()})
+                        merged[rno]['시설 근처 정류소'].add(str(stop))
+
+                if len(merged) > 0:
+                    # merged는 이미 버스번호 -> {'사용자 근처 정류소': set(...), '시설 근처 정류소': set(...)} 형태입니다.
+                    rows = []
+                    for rno, cols in merged.items():
+                        u = ', '.join(sorted(cols['사용자 근처 정류소'])) if cols['사용자 근처 정류소'] else ''
+                        f = ', '.join(sorted(cols['시설 근처 정류소'])) if cols['시설 근처 정류소'] else ''
+                        rows.append({'버스번호': rno, '사용자 근처 정류소': u, '시설 근처 정류소': f})
+
+                    df_routes = _pd.DataFrame(rows).set_index('버스번호')
+                    st.dataframe(df_routes)
                 else:
-                    st.info('버스 노선 데이터가 없거나 해당 정류장에 대한 노선 정보를 찾을 수 없습니다.')
+                    # direct_routes(간단 리스트)로만 존재하는 경우를 처리
+                    direct = to_pylist(routes.get('direct_routes', [])) if isinstance(routes, dict) else []
+                    if len(direct) > 0:
+                        df_routes = _pd.DataFrame({'버스번호': direct, '사용자 근처 정류소': [''] * len(direct), '시설 근처 정류소': [''] * len(direct)}).set_index('버스번호')
+                        st.dataframe(df_routes)
+                    else:
+                        st.info('직통 노선 정보를 찾을 수 없습니다.')
             except Exception as e:
                 st.error('버스 노선 조회 중 오류: ' + str(e))
     
