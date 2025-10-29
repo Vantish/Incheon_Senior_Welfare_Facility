@@ -57,12 +57,19 @@ import pickle
 
 
 
+def haversine(lat1, lon1, lat2, lon2):
+    """두 지점(사용자 위치와 시설)의 직선 거리를 km 단위로 계산 (Haversine 공식)"""
+    lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
+    c = 2 * np.arcsin(np.sqrt(a))
+    r = 6371  # 지구 반지름 (km)
+    return c * r
+
 
 def run_map():
-    """Main Streamlit entry: show map, nearby facilities and optional overlays.
-
-    This version preserves original behaviour but is written in a clearer linear style.
-    """
+    """Main Streamlit entry: show map, nearby facilities and optional overlays."""
     st.subheader('위치 기반 추천')
     st.text('\n')
 
@@ -110,48 +117,37 @@ def run_map():
     if candidates.shape[0] == 0:
         st.error('선택된 유형의 시설이 없습니다.')
         return
+    
+ # 3) 직선 거리 1km(1000m)로 필터링
+    candidates['straight_dist_m'] = candidates.apply(
+        lambda row: haversine(ulat, ulon, row[lat_col], row[lon_col]) * 1000, axis=1
+    )
+    candidates = candidates[candidates['straight_dist_m'] <= 1000]
+    if candidates.shape[0] == 0:
+        st.error('직선 거리 1km 이내의 시설이 없습니다.')
+        return
 
-    # 3) 거리 계산 및 최적 시설 선택
-    road_results = find_nearest_facilities((ulat, ulon), candidates, return_count=5, candidate_prefilter=20, graph_cache_path=GRAPH_CACHE_PATH)
+    # 4) 거리 계산 및 최적 시설 선택
+    road_results = find_nearest_facilities((ulat, ulon), candidates, return_count=5, candidate_prefilter=10, graph_cache_path=GRAPH_CACHE_PATH)
     if road_results is None or road_results.shape[0] == 0:
         st.error('거리 계산 결과가 없습니다.')
         return
-    best = road_results.iloc[0]
+
+
+    # 5) 도로 거리 1km(1000m)로 필터링
+    if 'road_dist_m' in road_results.columns:
+        road_results = road_results[road_results['road_dist_m'] <= 1000]
+        if road_results.shape[0] == 0:
+            st.error('도로 거리 1km 이내의 시설이 없습니다.')
+            return
+        
+    best = road_results.iloc[0] if not road_results.empty else None
     best5 = road_results.head(5)
-    st.write('추천 시설 유형 5곳')
-    gb = GridOptionsBuilder.from_dataframe(best5)
-    gb.configure_columns(['straight_dist_m', 'road_dist_m', 'lat', 'lon'], hide=True)
-    gb.configure_default_column(editable=False, sortable=True, filter=True)
-    gb.configure_selection(selection_mode='single')
-    grid_options = gb.build()
-    grid_response = AgGrid(
-        best5,
-        gridOptions=grid_options,
-        update_mode=GridUpdateMode.SELECTION_CHANGED,
-        fit_columns_on_grid_load=True,
-        theme='streamlit',
-        height=180,
-    )
-    selected_rows = grid_response['selected_rows']
+    st.write('데이터프레임 상위 5개 (1km 이내)')
+    st.dataframe(best5)
 
-   # 선택값이 None이면 빈 리스트 처리
-    if selected_rows is None:
-        selected_rows = []
-
-    # 선택값이 DataFrame이면 리스트(dict)로 변환
-    if isinstance(selected_rows, pd.DataFrame):
-        selected_rows = selected_rows.to_dict(orient='records')
-
-    # 선택값이 있으면 첫 행 사용, 없으면 기본값
-    if len(selected_rows) > 0:
-        best = selected_rows[0]  # dict
-    else:
-        best = road_results.iloc[0].to_dict()
-
-
-
-    # 4) 기본 지도 생성 및 표시
-    fmap = folium.Map(location=[ulat, ulon], zoom_start=14)
+  # 6) 기본 지도 생성 및 표시
+    fmap = folium.Map(location=[ulat, ulon], zoom_start=16)  # 1km에 맞게 확대
     try:
         st.session_state['fmap'] = fmap
     except Exception:
