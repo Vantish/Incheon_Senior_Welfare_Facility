@@ -8,9 +8,9 @@ def run_home():
     st.set_page_config(page_title="인천 맞춤 노인 돌봄 서비스", layout="wide")
 
     # 상단 이미지 및 제목
-    st.image("data/home_tit.png", use_container_width=True)
-    #st.markdown("<h1 style='text-align:center; margin-bottom: 0.3rem;'>인천 맞춤 노인 돌봄 서비스</h1>", unsafe_allow_html=True)
-    #st.markdown("<p style='text-align:center; color:gray; margin-top:0;'>위치 기반으로 시설, 맛집, 여가시설, 버스 정보를 한눈에 확인하세요.</p>", unsafe_allow_html=True)
+    # st.image("data/home_tit.png", use_container_width=True)
+    st.markdown("<h1 style='text-align:left;'>인천 맞춤 노인 돌봄 서비스</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:left; color:gray; margin-top:0;'>위치 기반으로 시설, 맛집, 여가시설, 버스 정보를 한눈에 확인하세요.</p>", unsafe_allow_html=True)
     
     # 탭 구성 (사용자용: 홈 / 주요 기능 / 사용법)
     tab1, tab2, tab3 = st.tabs(["홈", "주요 기능", "사용법"])
