@@ -133,7 +133,7 @@ def run_map():
     best = road_results.iloc[0] if not road_results.empty else None
     best5 = road_results.head(5)
     best5['거리'] = best5['road_dist_m'].apply(lambda d: f"{d:.1f} m" if d < 1000 else f"{d/1000:.2f} km")
-    # st.write('데이터프레임 상위 5개 (10km 이내)')
+    st.write('시설명을 선택 하시면 경로가 갱신됩니다.')
     gb = GridOptionsBuilder.from_dataframe(best5)
     gb.configure_columns(['straight_dist_m', 'road_dist_m', 'lat', 'lon'], hide=True)
     gb.configure_default_column(editable=False, sortable=True, filter=True)
@@ -141,11 +141,13 @@ def run_map():
     gb.configure_grid_options(domLayout='autoHeight')
     grid_options = gb.build()
 
-    # 레이아웃: 왼쪽에 큰 맵, 오른쪽에 컨트롤/목록
-    col_map, col_info = st.columns([3, 1])
+    # 레이아웃: 상단에 후보 목록(왼쪽)과 선택된 시설 카드(오른쪽)을 배치하고
+    # 그 아래 전체 너비로 지도를 표시합니다.
+    top_left, top_right = st.columns([3, 1])
 
-    with col_info:
-        st.markdown('### 후보 시설 (선택하세요)')
+    # 왼쪽: 후보 목록(Grid)
+    with top_left:
+        st.markdown('### 가까운 시설 5개 (10km 이내)')
         # 동적 높이: 행 수에 따라 그리드 높이를 자동 조절합니다.
         # 기본: 80px + 40px * rows, 최대 450px
         try:
@@ -164,21 +166,21 @@ def run_map():
         )
         selected_rows = grid_response.get('selected_rows', [])
 
-        # 선택값이 None이면 빈 리스트 처리
-        if selected_rows is None:
-            selected_rows = []
+    # 선택값 정리 및 기본값 결정
+    if selected_rows is None:
+        selected_rows = []
+    if isinstance(selected_rows, pd.DataFrame):
+        selected_rows = selected_rows.to_dict(orient='records')
+    if len(selected_rows) > 0:
+        best = selected_rows[0]
+    else:
+        best = road_results.iloc[0].to_dict()
 
-        # 선택값이 DataFrame이면 리스트(dict)로 변환
-        if isinstance(selected_rows, pd.DataFrame):
-            selected_rows = selected_rows.to_dict(orient='records')
-
-        # 선택값이 있으면 첫 행 사용, 없으면 기본값
-        if len(selected_rows) > 0:
-            best = selected_rows[0]  # dict
-        else:
-            best = road_results.iloc[0].to_dict()
-
-        # 선택된 시설 요약 표시 (간단한 카드)
+    # 오른쪽: 선택된 시설 카드
+    with top_right:
+        st.markdown('### 선택된 시설')
+        st.write('\n')
+        st.write('\n')
         try:
             name = best.get(노인복지시설_df.columns[0], '')
             kind = best.get(type_col, '')
@@ -187,10 +189,9 @@ def run_map():
                 dist_str = f"{dist:.1f} m" if dist < 1000 else f"{dist/1000:.2f} km"
             else:
                 dist_str = str(dist)
-            st.markdown('---')
-            st.markdown(f"**선택된 시설**\n\n- 이름: **{name}**\n- 유형: {kind}\n- 거리: {dist_str}")
+            st.markdown(f"- 이름: **{name}**\n- 유형: {kind}\n- 거리: {dist_str}")
         except Exception:
-            pass
+            st.write('선택 정보를 표시할 수 없습니다.')
 
   # 6) 기본 지도 생성 및 표시
     fmap = folium.Map(location=[ulat, ulon], zoom_start=14)  # 1km에 맞게 확대
@@ -338,14 +339,9 @@ def run_map():
 
     # 7) 지도 렌더링 및 테이블/버튼 표시
     fmap_html = fmap._repr_html_()
-    with col_map:
-        st.markdown('### 지도')
-        st_html(fmap_html, height=680)
-
-    # 우측 정보 영역(지도 아래)에 상세 컨트롤 위치
-    with col_info:
-        st.markdown('### 추가 정보')
-        st.caption('왼쪽 지도의 마커를 클릭하거나 우측 목록에서 시설을 선택하면 경로가 갱신됩니다.')
+    # 전체 너비로 지도를 표시합니다 (데이터프레임/선택카드 아래).
+    st.markdown('### 지도')
+    st_html(fmap_html, height=680)
 
     if bus_request:
         st.markdown('### 근처 정류장 (사용자 / 시설)')
