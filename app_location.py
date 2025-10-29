@@ -12,7 +12,7 @@ import requests
 # 지도 없이 , 사용자 도로명 주소 입력 => 위도, 경도 , 도로명 주소 받아서 리스트로
 # 시설유형 선택 => 리스트로 
 
-df= pd.read_csv('./data/인천광역시_노인복지시설_현황.csv',encoding='euc-kr')
+df= pd.read_csv('./data/인천광역시_노인복지시설_현황_최종.csv',encoding='euc-kr')
 
 
 def run_location():
