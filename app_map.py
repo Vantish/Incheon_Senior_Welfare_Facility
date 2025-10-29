@@ -118,7 +118,7 @@ def run_map():
         return
     best = road_results.iloc[0]
     best5 = road_results.head(5)
-    st.write('데이터프레임 상위 5개')
+    st.write('추천 시설 유형 5곳')
     gb = GridOptionsBuilder.from_dataframe(best5)
     gb.configure_columns(['straight_dist_m', 'road_dist_m', 'lat', 'lon'], hide=True)
     gb.configure_default_column(editable=False, sortable=True, filter=True)
