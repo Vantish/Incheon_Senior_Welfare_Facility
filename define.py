@@ -77,7 +77,7 @@ def find_nearest_facilities(user_location, facilities_df: pd.DataFrame, return_c
         return df
 
     # 직선거리 계산 및 10km 제한
-    df[' straight_dist_m'] = df.apply(lambda r: _haversine_m((ulat, ulon), (r[lat_col], r[lon_col])), axis=1)
+    df['straight_dist_m'] = df.apply(lambda r: _haversine_m((ulat, ulon), (r[lat_col], r[lon_col])), axis=1)
     df = df[df['straight_dist_m'] <= 10000]  # 10km 이내로 제한
     if df.shape[0] == 0:
         return pd.DataFrame(columns=df.columns)  # 빈 데이터프레임 반환
