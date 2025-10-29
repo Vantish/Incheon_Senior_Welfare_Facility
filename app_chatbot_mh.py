@@ -8,7 +8,7 @@ from sklearn.tree import DecisionTreeClassifier
 @st.cache_data
 def load_data():
     facilities = pd.read_csv('./data/인천광역시 시설 현황.csv', encoding='euc-kr')
-    restaurants = pd.read_csv('./data/인천광역시 식당 현황.csv', encoding='CP949')
+    restaurants = pd.read_csv('./data/인천식당_카테고리_수정.csv', encoding='CP949')
 
     facilities = facilities[['시설명', '시설분류', '도로명 주소', 'lat', 'lon']].dropna()
     restaurants = restaurants[['식당명', '행정구역', '도로명 주소', 'lat', 'lon']].dropna()
@@ -31,7 +31,7 @@ scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
 
 # 3. 챗봇 UI
-st.title("🤖 인천 챗봇 추천 시스템")
+st.title("인천 챗봇 추천 시스템")
 st.markdown("원하는 시설 유형과 위치를 말해주세요. 예: `식당`, `배드민턴장`, `게이트볼장` 등")
 
 # 대화 상태 저장
@@ -46,7 +46,7 @@ if user_input:
 
     # 간단한 파싱 (시설분류 추출)
     import re
-    match = re.search(r"(식당|축구장|배드민턴장|게이트볼장|농구장|풋살장|야외운동기구|인라인스케이트장|족구장|다목적구장|국궁장|다목적운동장|테니스장|운동장|소운동장|야구장|X-게임장)", user_input)
+    match = re.search(r"(식당|맛집|공원|축구장|배드민턴장|게이트볼장|농구장|풋살장|야외운동기구|인라인스케이트장|족구장|다목적구장|국궁장|다목적운동장|테니스장|운동장|소운동장|야구장|X-게임장)", user_input)
     if match:
         facility_type = match.group(1)
         lat, lon = 37.5, 126.7  # 인천 중심 좌표 예시
@@ -70,7 +70,7 @@ if user_input:
             tree_prediction = tree.predict(user_input_df)
 
             # 응답 구성
-            response = f"검색결과:\n"
+            response = f"문의사항에 대한 내용을 안내해드릴게요\n"
             for _, row in knn_results.iterrows():
                 response += f"- {row['시설명']} ({row['시설분류']}) @ {row['도로명 주소']}\n"
 
@@ -83,6 +83,6 @@ if user_input:
 # 대화 출력
 for speaker, message in st.session_state.chat_history:
     if speaker == "user":
-        st.chat_message("user").markdown(message)
+        st.chat_message("assistant", avatar="https://cdn-icons-png.flaticon.com/128/16683/16683419.png").markdown("추천드릴게요!")
     else:
-        st.chat_message("assistant").markdown(message)
+        st.chat_message("assistant", avatar="https://cdn-icons-png.flaticon.com/128/6014/6014401.png").markdown(message)
