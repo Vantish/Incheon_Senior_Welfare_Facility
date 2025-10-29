@@ -1,4 +1,5 @@
 import streamlit as st
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 from app_bus_stop_recommendation import bus_stop_recommendation
 from app_bus_route import check_bus_route
 from app_around_leisure_restaurant import around_leisure
@@ -117,8 +118,37 @@ def run_map():
         return
     best = road_results.iloc[0]
     best5 = road_results.head(5)
-    st.write('데이터프레임 상위 5개')
-    st.dataframe(best5)
+    st.write('추천 시설 유형 5곳')
+    gb = GridOptionsBuilder.from_dataframe(best5)
+    gb.configure_columns(['straight_dist_m', 'road_dist_m', 'lat', 'lon'], hide=True)
+    gb.configure_default_column(editable=False, sortable=True, filter=True)
+    gb.configure_selection(selection_mode='single')
+    grid_options = gb.build()
+    grid_response = AgGrid(
+        best5,
+        gridOptions=grid_options,
+        update_mode=GridUpdateMode.SELECTION_CHANGED,
+        fit_columns_on_grid_load=True,
+        theme='streamlit',
+        height=180,
+    )
+    selected_rows = grid_response['selected_rows']
+
+   # 선택값이 None이면 빈 리스트 처리
+    if selected_rows is None:
+        selected_rows = []
+
+    # 선택값이 DataFrame이면 리스트(dict)로 변환
+    if isinstance(selected_rows, pd.DataFrame):
+        selected_rows = selected_rows.to_dict(orient='records')
+
+    # 선택값이 있으면 첫 행 사용, 없으면 기본값
+    if len(selected_rows) > 0:
+        best = selected_rows[0]  # dict
+    else:
+        best = road_results.iloc[0].to_dict()
+
+
 
     # 4) 기본 지도 생성 및 표시
     fmap = folium.Map(location=[ulat, ulon], zoom_start=14)
@@ -127,10 +157,24 @@ def run_map():
     except Exception:
         pass
 
-    # 사용자/선택 시설 마커
-    folium.Marker([ulat, ulon], popup=make_popup('사용자 위치'), icon=folium.Icon(color='blue')).add_to(fmap)
-    best_title = str(best.get(type_col, '시설')) + '<br>' + str(best.get(노인복지시설_df.columns[0], '이름'))
-    folium.Marker([best[lat_col], best[lon_col]], popup=make_popup(best_title), icon=folium.Icon(color='red')).add_to(fmap)
+
+    # 사용자 위치 마커
+    folium.Marker(
+        [ulat, ulon],
+        popup=make_popup('사용자 위치'),
+        icon=folium.Icon(color='blue', icon='user', prefix='fa')
+    ).add_to(fmap)
+
+
+    # 5개 시설 모두 마커 표시
+    for _, row in best5.iterrows():
+        title = str(row.get(type_col, '시설')) + '<br>' + str(row.get(노인복지시설_df.columns[0], '이름'))
+        folium.Marker(
+            [row[lat_col], row[lon_col]],
+            popup=make_popup(title),
+            icon=folium.Icon(color='red', icon='flag')
+        ).add_to(fmap)
+
 
     # 5) 경로 그리기 (osmnx 그래프가 있으면 시도, 없으면 직선 폴백)
     draw_route_on_map(fmap, ulat, ulon, best[lat_col], best[lon_col], graph_cache_path=GRAPH_CACHE_PATH)
@@ -153,6 +197,7 @@ def run_map():
     user_df = None
     fac_df = None
 
+
     # 맛집 마커
     if '맛집' in selection:
         try:
@@ -169,11 +214,17 @@ def run_map():
                                 extra = r[c]
                                 break
                         popup_text = label if not extra else f"{label}<br>{extra}"
-                        folium.CircleMarker([latv, lonv], radius=4, color='orange', popup=make_popup(popup_text)).add_to(fmap)
+                        # 눈에 띄는 마커로 변경
+                        folium.Marker(
+                            [latv, lonv],
+                            popup=make_popup(popup_text),
+                            icon=folium.Icon(color='orange', icon='cutlery', prefix='fa')
+                        ).add_to(fmap)
                     except Exception:
                         continue
         except Exception:
             st.warning('맛집 정보를 불러오는 중 오류가 발생했습니다.')
+
 
     # 여가시설 마커
     if '여가시설' in selection:
@@ -191,11 +242,17 @@ def run_map():
                                 extra = r[c]
                                 break
                         popup_text = label if not extra else f"{label}<br>{extra}"
-                        folium.CircleMarker([latv, lonv], radius=4, color='purple', popup=make_popup(popup_text)).add_to(fmap)
+                        # 눈에 띄는 마커로 변경
+                        folium.Marker(
+                            [latv, lonv],
+                            popup=make_popup(popup_text),
+                            icon=folium.Icon(color='purple', icon='star', prefix='fa')
+                        ).add_to(fmap)
                     except Exception:
                         continue
         except Exception:
             st.warning('여가시설 정보를 불러오는 중 오류가 발생했습니다.')
+
 
     # 정류장 마커 및 테이블 준비
     bus_request = False
@@ -215,13 +272,21 @@ def run_map():
                 if user_df is not None and hasattr(user_df, 'iterrows') and not user_df.empty:
                     for _, r in user_df.iterrows():
                         try:
-                            folium.CircleMarker([float(r['lat']), float(r['lon'])], radius=4, color='cadetblue', popup=make_popup(f"{r.get('정류장명','정류장')}<br>{int(r.get('dist_user_m',0))}m", width=200)).add_to(fmap)
+                            folium.Marker(
+                                [float(r['lat']), float(r['lon'])],
+                                popup=make_popup(f"{r.get('정류장명','정류장')}<br>{int(r.get('dist_user_m',0))}m", width=200),
+                                icon=folium.Icon(color='green', icon='bus', prefix='fa')
+                            ).add_to(fmap)
                         except Exception:
                             continue
                 if fac_df is not None and hasattr(fac_df, 'iterrows') and not fac_df.empty:
                     for _, r in fac_df.iterrows():
                         try:
-                            folium.CircleMarker([float(r['lat']), float(r['lon'])], radius=4, color='darkblue', popup=make_popup(f"{r.get('정류장명','정류장')}<br>{int(r.get('dist_fac_m',0))}m", width=200)).add_to(fmap)
+                            folium.Marker(
+                                [float(r['lat']), float(r['lon'])],
+                                popup=make_popup(f"{r.get('정류장명','정류장')}<br>{int(r.get('dist_fac_m',0))}m", width=200),
+                                icon=folium.Icon(color='darkgreen', icon='bus', prefix='fa')
+                            ).add_to(fmap)
                         except Exception:
                             continue
             except Exception:
