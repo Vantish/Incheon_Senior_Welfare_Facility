@@ -133,7 +133,7 @@ def run_map():
     best = road_results.iloc[0] if not road_results.empty else None
     best5 = road_results.head(5)
     best5['거리'] = best5['road_dist_m'].apply(lambda d: f"{d:.1f} m" if d < 1000 else f"{d/1000:.2f} km")
-    st.write('시설을 마우스로 클릭하면 경로가 갱신됩니다.')
+    st.write('시설명을 선택 하시면 경로가 갱신됩니다.')
     gb = GridOptionsBuilder.from_dataframe(best5)
     gb.configure_columns(['straight_dist_m', 'road_dist_m', 'lat', 'lon'], hide=True)
     gb.configure_default_column(editable=False, sortable=True, filter=True)
