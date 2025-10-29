@@ -56,18 +56,6 @@ import pickle
 
 
 
-
-def haversine(lat1, lon1, lat2, lon2):
-    """두 지점(사용자 위치와 시설)의 직선 거리를 km 단위로 계산 (Haversine 공식)"""
-    lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
-    a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
-    c = 2 * np.arcsin(np.sqrt(a))
-    r = 6371  # 지구 반지름 (km)
-    return c * r
-
-
 def run_map():
     """Main Streamlit entry: show map, nearby facilities and optional overlays."""
     st.subheader('위치 기반 추천')
