@@ -12,7 +12,7 @@ import requests
 # 지도 없이 , 사용자 도로명 주소 입력 => 위도, 경도 , 도로명 주소 받아서 리스트로
 # 시설유형 선택 => 리스트로 
 
-df= pd.read_csv('./data/인천광역시_노인복지시설_현황.csv',encoding='euc-kr')
+df= pd.read_csv('./data/인천광역시_노인복지시설_현황_최종.csv',encoding='euc-kr')
 
 
 def run_location():
@@ -45,12 +45,12 @@ def run_location():
         facility_types = df['시설유형'].dropna().unique()
         selected_type = st.selectbox('시설유형을 선택하세요', facility_types)
     else:
-        st.write('주소를 입력해주세요')
+        
     
 
     # 주소가 비어 있으면 None 반환 (app_map에서 체크)
-    if not address:
-        st.info('주소를 입력하면 해당 위치를 찾아 추천을 제공합니다.')
+        if not address:
+            st.info('주소를 입력하면 해당 위치를 찾아 추천을 제공합니다.')
         return None
 
     # 지오코딩 실패 시 None 반환
