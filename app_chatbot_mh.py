@@ -80,9 +80,34 @@ if user_input:
 
     st.session_state.chat_history.append(("bot", response))
 
+
+def render_message(speaker, message, avatar_url):
+    if speaker == "user":
+        bubble_color = "#e0f7fa"
+        align = "right"
+    else:
+        bubble_color = "#fdebdf"
+        align = "left"
+
+    st.markdown(
+        f"""
+        <div style="display: flex; justify-content: {align}; margin-bottom: 10px;">
+            <img src="{avatar_url}" style="width: 40px; height: 40px; border-radius: 50%; margin: 5px;" />
+            <div style="background-color: {bubble_color}; padding: 10px 15px; border-radius: 15px; max-width: 70%; font-size: 16px;">
+                {message}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+
+
 # 대화 출력
 for speaker, message in st.session_state.chat_history:
     if speaker == "user":
-        st.chat_message("assistant", avatar="https://cdn-icons-png.flaticon.com/128/16683/16683419.png").markdown("추천드릴게요!")
+        render_message("user", message, "https://cdn-icons-png.flaticon.com/128/16683/16683419.png")
     else:
-        st.chat_message("assistant", avatar="https://cdn-icons-png.flaticon.com/128/6014/6014401.png").markdown(message)
+        render_message("bot", message, "https://cdn-icons-png.flaticon.com/128/6819/6819658.png")
+
