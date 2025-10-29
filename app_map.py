@@ -5,7 +5,8 @@ from app_bus_route import check_bus_route
 from app_around_leisure_restaurant import around_leisure
 from app_around_leisure_restaurant import around_restaurant
 from app_location import run_location
-from define import find_nearest_facilities, make_popup, draw_route_on_map, to_pylist, normalize_routes_output, extract_stop_list
+from define import find_nearest_facilities, make_popup, draw_route_on_map, to_pylist, normalize_routes_output, extract_stop_list, _haversine_m
+
 
 import numpy as np
 import pandas as pd
@@ -106,32 +107,32 @@ def run_map():
         st.error('선택된 유형의 시설이 없습니다.')
         return
     
- # 3) 직선 거리 1km(1000m)로 필터링
+ # 3) 직선 거리 10km로 필터링
     candidates['straight_dist_m'] = candidates.apply(
-        lambda row: haversine(ulat, ulon, row[lat_col], row[lon_col]) * 1000, axis=1
+        lambda row: _haversine_m((ulat, ulon), (row[lat_col], row[lon_col])), axis=1
     )
-    candidates = candidates[candidates['straight_dist_m'] <= 1000]
+    candidates = candidates[candidates['straight_dist_m'] <= 10000]
     if candidates.shape[0] == 0:
-        st.error('직선 거리 1km 이내의 시설이 없습니다.')
+        st.error('직선 거리 10km 이내의 시설이 없습니다.')
         return
 
     # 4) 거리 계산 및 최적 시설 선택
     road_results = find_nearest_facilities((ulat, ulon), candidates, return_count=5, candidate_prefilter=10, graph_cache_path=GRAPH_CACHE_PATH)
     if road_results is None or road_results.shape[0] == 0:
-        st.error('거리 계산 결과가 없습니다.')
+        st.error('10km 이내의 시설이 없습니다.')
         return
 
 
-    # 5) 도로 거리 1km(1000m)로 필터링
+    # 5) 도로 거리 10km로 필터링
     if 'road_dist_m' in road_results.columns:
-        road_results = road_results[road_results['road_dist_m'] <= 1000]
+        road_results = road_results[road_results['road_dist_m'] <= 10000]
         if road_results.shape[0] == 0:
-            st.error('도로 거리 1km 이내의 시설이 없습니다.')
+            st.error('도로 거리 10km 이내의 시설이 없습니다.')
             return
         
     best = road_results.iloc[0] if not road_results.empty else None
     best5 = road_results.head(5)
-    st.write('데이터프레임 상위 5개 (1km 이내)')
+    st.write('데이터프레임 상위 5개 (10km 이내)')
     st.dataframe(best5)
 
   # 6) 기본 지도 생성 및 표시

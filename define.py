@@ -37,6 +37,7 @@ def find_nearest_facilities(user_location, facilities_df: pd.DataFrame, return_c
                             candidate_prefilter: int = 20, graph_cache_path: str = './incheon_graph.pkl') -> pd.DataFrame:
     """
     사용자의 위치와 시설 데이터프레임을 받아 가장 가까운 시설들을 반환합니다.
+    직선 거리와 도로 거리를 10km(10,000m)로 제한
 
     - 동작 흐름:
       1) facilities_df에서 위도/경도 컬럼(lat, lon 또는 lot 등)을 자동으로 판별합니다.
@@ -75,8 +76,11 @@ def find_nearest_facilities(user_location, facilities_df: pd.DataFrame, return_c
     if df.shape[0] == 0:
         return df
 
-    # 직선거리 계산
-    df['straight_dist_m'] = df.apply(lambda r: _haversine_m((ulat, ulon), (r[lat_col], r[lon_col])), axis=1)
+    # 직선거리 계산 및 10km 제한
+    df[' straight_dist_m'] = df.apply(lambda r: _haversine_m((ulat, ulon), (r[lat_col], r[lon_col])), axis=1)
+    df = df[df['straight_dist_m'] <= 10000]  # 10km 이내로 제한
+    if df.shape[0] == 0:
+        return pd.DataFrame(columns=df.columns)  # 빈 데이터프레임 반환
 
     # 후보 프리필터: 직선거리 기준으로 가장 가까운 candidate_prefilter개
     candidate_n = min(candidate_prefilter, len(df))
@@ -100,6 +104,8 @@ def find_nearest_facilities(user_location, facilities_df: pd.DataFrame, return_c
                     except Exception:
                         lengths.append(float('inf'))
                 candidates['road_dist_m'] = lengths
+                # 도로 거리 10km 제한
+                candidates = candidates[candidates['road_dist_m'] <= 10000]
                 road_results = candidates
         except Exception:
             road_results = None
@@ -107,6 +113,7 @@ def find_nearest_facilities(user_location, facilities_df: pd.DataFrame, return_c
     # 도로 거리가 계산되지 않았다면 직선거리로 대체
     if road_results is None:
         candidates['road_dist_m'] = candidates['straight_dist_m']
+        candidates = candidates[candidates['road_dist_m'] <= 10000]  # 직선 거리로 대체 시에도 10km 제한
         road_results = candidates
 
     # road_dist_m 기준으로 정렬하고 return_count개 반환
