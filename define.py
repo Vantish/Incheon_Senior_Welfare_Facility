@@ -22,6 +22,27 @@ try:
 except Exception:
     _OSM = False
 
+import base64
+
+def set_sidebar_background(image_path):
+    # 로컬 이미지 파일을 base64로 읽기
+    with open(image_path, "rb") as f:
+        encoded = base64.b64encode(f.read()).decode()
+    
+    # CSS로 사이드바 배경 설정
+    st.markdown(
+        f"""
+        <style>
+        [data-testid="stSidebar"] {{
+            background-image: url("data:image/jpg;base64,{encoded}");
+            background-size: cover;
+            background-position: center;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    
 def _haversine_m(a, b):
     """두 지점(a, b)의 직선 거리(m)를 반환합니다. 입력은 (lat, lon)."""
     lat1, lon1 = math.radians(a[0]), math.radians(a[1])
