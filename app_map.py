@@ -133,7 +133,34 @@ def run_map():
     best = road_results.iloc[0] if not road_results.empty else None
     best5 = road_results.head(5)
     st.write('데이터프레임 상위 5개 (10km 이내)')
-    st.dataframe(best5)
+    gb = GridOptionsBuilder.from_dataframe(best5)
+    gb.configure_columns(['straight_dist_m', 'road_dist_m', 'lat', 'lon'], hide=True)
+    gb.configure_default_column(editable=False, sortable=True, filter=True)
+    gb.configure_selection(selection_mode='single')
+    grid_options = gb.build()
+    grid_response = AgGrid(
+        best5,
+        gridOptions=grid_options,
+        update_mode=GridUpdateMode.SELECTION_CHANGED,
+        fit_columns_on_grid_load=True,
+        theme='streamlit',
+        height=180,
+    )
+    selected_rows = grid_response['selected_rows']
+
+   # 선택값이 None이면 빈 리스트 처리
+    if selected_rows is None:
+        selected_rows = []
+
+    # 선택값이 DataFrame이면 리스트(dict)로 변환
+    if isinstance(selected_rows, pd.DataFrame):
+        selected_rows = selected_rows.to_dict(orient='records')
+
+    # 선택값이 있으면 첫 행 사용, 없으면 기본값
+    if len(selected_rows) > 0:
+        best = selected_rows[0]  # dict
+    else:
+        best = road_results.iloc[0].to_dict()
 
   # 6) 기본 지도 생성 및 표시
     fmap = folium.Map(location=[ulat, ulon], zoom_start=16)  # 1km에 맞게 확대
