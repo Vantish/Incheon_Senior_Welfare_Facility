@@ -127,10 +127,24 @@ def run_map():
     except Exception:
         pass
 
-    # 사용자/선택 시설 마커
-    folium.Marker([ulat, ulon], popup=make_popup('사용자 위치'), icon=folium.Icon(color='blue')).add_to(fmap)
-    best_title = str(best.get(type_col, '시설')) + '<br>' + str(best.get(노인복지시설_df.columns[0], '이름'))
-    folium.Marker([best[lat_col], best[lon_col]], popup=make_popup(best_title), icon=folium.Icon(color='red')).add_to(fmap)
+
+    # 사용자 위치 마커
+    folium.Marker(
+        [ulat, ulon],
+        popup=make_popup('사용자 위치'),
+        icon=folium.Icon(color='blue', icon='user', prefix='fa')
+    ).add_to(fmap)
+
+
+    # 5개 시설 모두 마커 표시
+    for _, row in best5.iterrows():
+        title = str(row.get(type_col, '시설')) + '<br>' + str(row.get(노인복지시설_df.columns[0], '이름'))
+        folium.Marker(
+            [row[lat_col], row[lon_col]],
+            popup=make_popup(title),
+            icon=folium.Icon(color='red', icon='flag')
+        ).add_to(fmap)
+
 
     # 5) 경로 그리기 (osmnx 그래프가 있으면 시도, 없으면 직선 폴백)
     draw_route_on_map(fmap, ulat, ulon, best[lat_col], best[lon_col], graph_cache_path=GRAPH_CACHE_PATH)
@@ -153,6 +167,7 @@ def run_map():
     user_df = None
     fac_df = None
 
+
     # 맛집 마커
     if '맛집' in selection:
         try:
@@ -169,11 +184,17 @@ def run_map():
                                 extra = r[c]
                                 break
                         popup_text = label if not extra else f"{label}<br>{extra}"
-                        folium.CircleMarker([latv, lonv], radius=4, color='orange', popup=make_popup(popup_text)).add_to(fmap)
+                        # 눈에 띄는 마커로 변경
+                        folium.Marker(
+                            [latv, lonv],
+                            popup=make_popup(popup_text),
+                            icon=folium.Icon(color='orange', icon='cutlery', prefix='fa')
+                        ).add_to(fmap)
                     except Exception:
                         continue
         except Exception:
             st.warning('맛집 정보를 불러오는 중 오류가 발생했습니다.')
+
 
     # 여가시설 마커
     if '여가시설' in selection:
@@ -191,11 +212,17 @@ def run_map():
                                 extra = r[c]
                                 break
                         popup_text = label if not extra else f"{label}<br>{extra}"
-                        folium.CircleMarker([latv, lonv], radius=4, color='purple', popup=make_popup(popup_text)).add_to(fmap)
+                        # 눈에 띄는 마커로 변경
+                        folium.Marker(
+                            [latv, lonv],
+                            popup=make_popup(popup_text),
+                            icon=folium.Icon(color='purple', icon='star', prefix='fa')
+                        ).add_to(fmap)
                     except Exception:
                         continue
         except Exception:
             st.warning('여가시설 정보를 불러오는 중 오류가 발생했습니다.')
+
 
     # 정류장 마커 및 테이블 준비
     bus_request = False
@@ -215,13 +242,21 @@ def run_map():
                 if user_df is not None and hasattr(user_df, 'iterrows') and not user_df.empty:
                     for _, r in user_df.iterrows():
                         try:
-                            folium.CircleMarker([float(r['lat']), float(r['lon'])], radius=4, color='cadetblue', popup=make_popup(f"{r.get('정류장명','정류장')}<br>{int(r.get('dist_user_m',0))}m", width=200)).add_to(fmap)
+                            folium.Marker(
+                                [float(r['lat']), float(r['lon'])],
+                                popup=make_popup(f"{r.get('정류장명','정류장')}<br>{int(r.get('dist_user_m',0))}m", width=200),
+                                icon=folium.Icon(color='green', icon='bus', prefix='fa')
+                            ).add_to(fmap)
                         except Exception:
                             continue
                 if fac_df is not None and hasattr(fac_df, 'iterrows') and not fac_df.empty:
                     for _, r in fac_df.iterrows():
                         try:
-                            folium.CircleMarker([float(r['lat']), float(r['lon'])], radius=4, color='darkblue', popup=make_popup(f"{r.get('정류장명','정류장')}<br>{int(r.get('dist_fac_m',0))}m", width=200)).add_to(fmap)
+                            folium.Marker(
+                                [float(r['lat']), float(r['lon'])],
+                                popup=make_popup(f"{r.get('정류장명','정류장')}<br>{int(r.get('dist_fac_m',0))}m", width=200),
+                                icon=folium.Icon(color='darkgreen', icon='bus', prefix='fa')
+                            ).add_to(fmap)
                         except Exception:
                             continue
             except Exception:
