@@ -7,11 +7,13 @@ def run_home():
     # 페이지 기본 설정
     st.set_page_config(page_title="인천 맞춤 노인 돌봄 서비스", layout="wide")
 
-    # 상단 이미지 삽입 (로컬 이미지 또는 URL 가능)
+    # 상단 이미지 및 제목
     st.image("data/home_tit.png", use_container_width=True)
+    #st.markdown("<h1 style='text-align:center; margin-bottom: 0.3rem;'>인천 맞춤 노인 돌봄 서비스</h1>", unsafe_allow_html=True)
+    #st.markdown("<p style='text-align:center; color:gray; margin-top:0;'>위치 기반으로 시설, 맛집, 여가시설, 버스 정보를 한눈에 확인하세요.</p>", unsafe_allow_html=True)
     
-    # 탭 구성
-    tab1, tab2 = st.tabs(["홈", "주요 기능"])
+    # 탭 구성 (사용자용: 홈 / 주요 기능 / 사용법)
+    tab1, tab2, tab3 = st.tabs(["홈", "주요 기능", "사용법"])
 
     # 탭 1: 홈
     with tab1:
@@ -30,12 +32,27 @@ def run_home():
     # 탭 2: 주요 기능
     with tab2:
         st.markdown("### 주요 기능 소개")
+        # 간단한 카드 스타일 열
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("- **노인복지시설 정보**: 위치, 시설 유형 별 확인 가능")
+            st.markdown("- **맛집 추천**: 사용자 위치 기반의 인기 맛집 리스트 제공")
+        with c2:
+            st.markdown("- **문화·체육시설 안내**: 공원내 체육시설 정보 제공")
+            st.markdown("- **버스 정류장 및 노선 정보**: 주변 정류장 위치, 버스 노선 조회")
+
+    # 탭 3: 사용법 (노년층을 고려한 쉬운 문장, 큰 글씨)
+    with tab3:
+        st.markdown("<h2 style='text-align:left; font-size:22px;'>간단한 사용법</h2>", unsafe_allow_html=True)
         st.markdown("""
-        - **노인복지시설 정보**: 위치, 시설 유형 별 확인 가능  
-        - **맛집 추천**: 사용자 위치 기반의 인기 맛집 리스트 제공 
-        - **문화·체육시설 안내**: 공원내 체육시설 정보 제공
-        - **버스 정류장 및 노선 정보**: 주변 정류장 위치, 버스 노선 조회
-        """)
+- 1단계: 왼쪽 메뉴에서 '위치 작성'을 선택하세요.
+- 2단계: 화면에서 본인의 위치(또는 확인하려는 주소)를 입력하세요.
+- 3단계: 나타난 지도에서 추천 시설을 확인하세요. 오른쪽 목록에서 시설을 택하면 상세 위치가 표시됩니다.
+- 4단계: '정류장'을 선택하면 근처 버스 정류장과 노선을 확인할 수 있습니다.
+- 도움말: 글씨가 작으면 브라우저의 확대 기능을 이용하세요(예: Ctrl + +).
+
+팁: 큰 글씨와 간단한 버튼으로 구성해 두었으니 천천히 하나씩 눌러 보세요.
+""", unsafe_allow_html=True)
 
     # # 탭 3: 기획 배경
     # with tab3:

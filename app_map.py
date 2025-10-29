@@ -1,5 +1,5 @@
 import streamlit as st
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 from app_bus_stop_recommendation import bus_stop_recommendation
 from app_bus_route import check_bus_route
 from app_around_leisure_restaurant import around_leisure
@@ -15,7 +15,7 @@ from streamlit.components.v1 import html as st_html
 import math
 from html import escape
 
-# optional heavy dependency for road-based routing
+# 도로 기반 라우팅에 사용되는 선택적(무거운) 의존성
 try:
     import osmnx as ox
     import networkx as nx
@@ -58,7 +58,7 @@ import pickle
 
 
 def run_map():
-    """Main Streamlit entry: show map, nearby facilities and optional overlays."""
+    """메인 Streamlit 진입점: 지도, 근처 시설 및 추가 오버레이를 표시합니다."""
     st.subheader('위치 기반 추천')
     st.text('\n')
 
@@ -138,30 +138,59 @@ def run_map():
     gb.configure_columns(['straight_dist_m', 'road_dist_m', 'lat', 'lon'], hide=True)
     gb.configure_default_column(editable=False, sortable=True, filter=True)
     gb.configure_selection(selection_mode='single')
+    gb.configure_grid_options(domLayout='autoHeight')
     grid_options = gb.build()
-    grid_response = AgGrid(
-        best5,
-        gridOptions=grid_options,
-        update_mode=GridUpdateMode.SELECTION_CHANGED,
-        fit_columns_on_grid_load=True,
-        theme='streamlit',
-        height=180,
-    )
-    selected_rows = grid_response['selected_rows']
 
-   # 선택값이 None이면 빈 리스트 처리
-    if selected_rows is None:
-        selected_rows = []
+    # 레이아웃: 왼쪽에 큰 맵, 오른쪽에 컨트롤/목록
+    col_map, col_info = st.columns([3, 1])
 
-    # 선택값이 DataFrame이면 리스트(dict)로 변환
-    if isinstance(selected_rows, pd.DataFrame):
-        selected_rows = selected_rows.to_dict(orient='records')
+    with col_info:
+        st.markdown('### 후보 시설 (선택하세요)')
+        # 동적 높이: 행 수에 따라 그리드 높이를 자동 조절합니다.
+        # 기본: 80px + 40px * rows, 최대 450px
+        try:
+            rows = len(best5) if hasattr(best5, '__len__') else 1
+        except Exception:
+            rows = 1
+        grid_height = min(450, 80 + 40 * max(1, rows))
 
-    # 선택값이 있으면 첫 행 사용, 없으면 기본값
-    if len(selected_rows) > 0:
-        best = selected_rows[0]  # dict
-    else:
-        best = road_results.iloc[0].to_dict()
+        grid_response = AgGrid(
+            best5,
+            gridOptions=grid_options,
+            update_mode=GridUpdateMode.SELECTION_CHANGED,
+            fit_columns_on_grid_load=True,
+            theme='streamlit',
+            height=grid_height,
+        )
+        selected_rows = grid_response.get('selected_rows', [])
+
+        # 선택값이 None이면 빈 리스트 처리
+        if selected_rows is None:
+            selected_rows = []
+
+        # 선택값이 DataFrame이면 리스트(dict)로 변환
+        if isinstance(selected_rows, pd.DataFrame):
+            selected_rows = selected_rows.to_dict(orient='records')
+
+        # 선택값이 있으면 첫 행 사용, 없으면 기본값
+        if len(selected_rows) > 0:
+            best = selected_rows[0]  # dict
+        else:
+            best = road_results.iloc[0].to_dict()
+
+        # 선택된 시설 요약 표시 (간단한 카드)
+        try:
+            name = best.get(노인복지시설_df.columns[0], '')
+            kind = best.get(type_col, '')
+            dist = best.get('road_dist_m') or best.get('straight_dist_m') or ''
+            if isinstance(dist, (int, float)):
+                dist_str = f"{dist:.1f} m" if dist < 1000 else f"{dist/1000:.2f} km"
+            else:
+                dist_str = str(dist)
+            st.markdown('---')
+            st.markdown(f"**선택된 시설**\n\n- 이름: **{name}**\n- 유형: {kind}\n- 거리: {dist_str}")
+        except Exception:
+            pass
 
   # 6) 기본 지도 생성 및 표시
     fmap = folium.Map(location=[ulat, ulon], zoom_start=16)  # 1km에 맞게 확대
@@ -309,7 +338,14 @@ def run_map():
 
     # 7) 지도 렌더링 및 테이블/버튼 표시
     fmap_html = fmap._repr_html_()
-    st_html(fmap_html, height=600)
+    with col_map:
+        st.markdown('### 지도')
+        st_html(fmap_html, height=680)
+
+    # 우측 정보 영역(지도 아래)에 상세 컨트롤 위치
+    with col_info:
+        st.markdown('### 추가 정보')
+        st.caption('왼쪽 지도의 마커를 클릭하거나 우측 목록에서 시설을 선택하면 경로가 갱신됩니다.')
 
     if bus_request:
         st.markdown('### 근처 정류장 (사용자 / 시설)')
@@ -333,7 +369,7 @@ def run_map():
 
         if st.button('해당 정류장들로 가는 버스 노선 조회'):
             # 간단한 CSV 기반 매칭 결과를 표 형태로 보여줍니다.
-            # 반환값 형태(예시):
+            # 반환값 예시(개념):
             # {
             #   'user': {정류장키: [노선,...], ...},
             #   'facility': {...},
@@ -341,16 +377,16 @@ def run_map():
             #   'direct_connections': [{'route':r,'user_stop':u,'facility_stop':f}, ...]
             # }
             try:
-                # convert user/fac dataframes into simple stop lists before calling check_bus_route
+                # check_bus_route를 호출하기 전에 user/fac DataFrame을 간단한 정류장 리스트로 변환합니다.
                 user_stops_input = extract_stop_list(user_df) if user_df is not None else []
                 fac_stops_input = extract_stop_list(fac_df) if fac_df is not None else []
 
                 routes = check_bus_route({'user': user_stops_input, 'facility': fac_stops_input})
-                # normalize everything into plain Python types (lists of strings)
+                # 모든 값을 평범한 파이썬 타입(예: 문자열 리스트)으로 정규화합니다.
                 routes = normalize_routes_output(routes)
                 import pandas as _pd
 
-                # coerce values to lists of strings (extra defensive normalization)
+                # 값을 문자열 리스트로 강제 변환합니다 (추가 방어적 정규화)
                 raw_user_side = routes.get('사용자 근처', {})
                 raw_fac_side = routes.get('시설 근처', {})
                 user_side = {str(k): [str(x).strip() for x in to_pylist(v) if str(x).strip()] for k, v in raw_user_side.items()} if isinstance(raw_user_side, dict) else {}
