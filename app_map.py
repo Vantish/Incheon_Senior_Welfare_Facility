@@ -194,7 +194,7 @@ def run_map():
             st.write('선택 정보를 표시할 수 없습니다.')
 
   # 6) 기본 지도 생성 및 표시
-    fmap = folium.Map(location=[ulat, ulon], zoom_start=16)  # 1km에 맞게 확대
+    fmap = folium.Map(location=[ulat, ulon], zoom_start=14)  # 1km에 맞게 확대
     try:
         st.session_state['fmap'] = fmap
     except Exception:
@@ -211,7 +211,7 @@ def run_map():
 
     # 5개 시설 모두 마커 표시
     for _, row in best5.iterrows():
-        title = str(row.get(type_col, '시설')) + '<br>' + str(row.get(노인복지시설_df.columns[0], '이름'))
+        title = str(row.get(노인복지시설_df.columns[0], '이름'))+ '<br>' +str(row.get(type_col, '시설'))
         folium.Marker(
             [row[lat_col], row[lon_col]],
             popup=make_popup(title),
