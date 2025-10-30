@@ -297,6 +297,9 @@ def run_map():
         except Exception:
             st.warning('여가시설 정보를 불러오는 중 오류가 발생했습니다.')
 
+    if '맛집' in selection or '여가시설' in selection:
+        user_input = st.text_input('근처 맛집/여가시설 검색어 입력 (예: "카페", "공원")', value='', key = 'user_search_keyword')
+
 
     # 정류장 마커 및 테이블 준비
     bus_request = False
