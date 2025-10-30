@@ -1,8 +1,8 @@
 import streamlit as st
 from app_home import run_home
 from app_map import run_map
+from app_chatbot_JS import run_chatbot
 from define import set_sidebar_background
-
 
 
 # 메인에서는 각 함수를 돌립니다.
@@ -19,7 +19,7 @@ def main():
     elif menu_select == menu_list[1]:
         run_map()
     elif menu_select == menu_list[2]:
-        pass
+        run_chatbot()
 
 
 
