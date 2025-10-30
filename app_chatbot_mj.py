@@ -40,7 +40,8 @@ def stream_gemini_response(client, model, prompt):
     full_response = ""
     placeholder = st.empty()  # 텍스트 보여줄 자리
     for chunk in response_stream:
-        full_response += chunk.text
+        if chunk.text is not None:
+            full_response += chunk.text
         placeholder.markdown(full_response)  # 부분 텍스트 실시간 업데이트
     return full_response
 
