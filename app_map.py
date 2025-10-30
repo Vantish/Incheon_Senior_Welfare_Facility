@@ -344,7 +344,7 @@ def run_map():
     st.markdown('### 지도')
     st_html(fmap_html, height=680)
 
-    if '맛집' in selection :
+    if '맛집' in selection or '여가시설' in selection:
         run_chatbot_app()
 
     if bus_request:

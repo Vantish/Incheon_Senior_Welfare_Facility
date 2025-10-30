@@ -138,17 +138,12 @@ def apply_custom_css():
 
 # --- 🚀 메인 함수 ---
 def main():
-
-    menu_list = ['홈', '사용자 위치 입력', '챗봇']
-    menu_select = st.sidebar.selectbox('메뉴', menu_list)
+    st.set_page_config(layout="wide")
+    
     set_sidebar_background("./data/sb_bg.png")
 
-    if menu_select == menu_list[0]:
-        run_home()
-    elif menu_select == menu_list[1]:
-        run_map()
-    elif menu_select == menu_list[2]:
-        run_chatbot()
+    # CSS 적용
+    apply_custom_css()
 
     if "page" not in st.session_state:
         st.session_state.page = "홈"
