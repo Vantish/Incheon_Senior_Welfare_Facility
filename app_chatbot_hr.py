@@ -64,7 +64,7 @@ def get_health_tip(bmi, bp_sys, bp_dia, fbs, waist, gender):
 
     return "\n\n".join(tips)
 
-def main():
+def run_chatbot_hhr():
     st.title("🏥 인천 노인을 위한 도우미 챗봇")
     st.write("건강검진과 관리, 복지 정보를 따뜻하게 안내드리는 챗봇입니다. 궁금하신 점을 편하게 물어보세요!")
 
@@ -192,7 +192,5 @@ def main():
                 st.markdown(assistant_message)
                 st.session_state.messages.append({"role": "assistant", "content": assistant_message})
 
-if __name__ == "__main__":
-    run_chatbot_hhr()
 
    
