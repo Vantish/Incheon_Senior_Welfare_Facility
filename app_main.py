@@ -1,14 +1,12 @@
 import streamlit as st
-from app_chatbot_hr import run_chatbot_hhr
 from app_chatbot_mj import run_chatbot_app
 from app_home import run_home
 from app_map import run_map
 from app_chatbot_JS import run_chatbot
-from define import set_sidebar_background
+from define import set_sidebar_background # 사용자 정의 배경 함수 유지
 
 
-# --- 📌 핵심 수정: st.container를 사용하여 각 아이템을 래핑하고 겹치기 ---
-# --- 📌 create_sidebar_item (컨테이너 제거, if st.button 사용) ---
+# --- 📌 Python 로직: st.markdown과 if st.button 사용 ---
 def create_sidebar_item(label, page_name, svg_path_d, current_page):
     
     is_active = current_page == page_name
@@ -28,14 +26,13 @@ def create_sidebar_item(label, page_name, svg_path_d, current_page):
         </div>
     """, unsafe_allow_html=True)
     
-    # 2. 기능적 요소 (st.button) 렌더링
-    # (CSS가 이 버튼을 시각적 요소 위로 끌어올릴 것입니다)
+    # 2. 기능적 요소 (st.button) 렌더링 (CSS가 겹치게 함)
     if st.sidebar.button(
         label=" ",  # 빈 문자열
         key=f"sidebar_btn_{page_name}",
     ):
         st.session_state.page = page_name
-        st.rerun() 
+        st.rerun() # 상태 변경 후 즉시 페이지 전환
 
     st.sidebar.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
 
@@ -93,31 +90,26 @@ def apply_custom_css():
         margin-right: 0 !important;
     }
 
-   /* 4. 실제 버튼 (<button>) */
+    /* 4. 실제 버튼 (<button>) */
     div.stButton > button {
         background-color: rgba(0, 0, 0, 0.001) !important; 
         border: none !important;
         color: transparent !important; 
         box-shadow: none !important;
         
-        /* 🚨 1. width: 100% 를 제거합니다. */
-        /* width: 100%; */ 
+        width: 100%;
+        height: 64px;
         
-        height: 64px; /* 높이는 유지 */
-        
-        /* 🚨 2. padding을 0으로 설정합니다. */
-        padding: 0 !important; 
+        /* 🚨 (A) 시각적 패딩과 동일하게 설정하여 크기를 맞춥니다. */
+        padding: 12px 20px !important; 
         margin: 0 !important;
         
-        /* 🚨 3. left: 0 과 right: 0 을 추가합니다. */
-        /* 이것이 버튼을 양쪽 끝으로 강제로 늘려줍니다. */
-        left: 0px !important;
-        right: 0px !important;
+        box-sizing: border-box; /* 패딩이 크기를 벗어나지 않도록 유지 */
         
-        box-sizing: border-box; 
         cursor: pointer;
         
-        /* left: 0 !important; (중복이므로 하나는 제거) */
+        /* 🚨 버튼이 왼쪽으로 붙어 튀어나가는 것을 방지 */
+        left: 0 !important;
     }
 
     /* 5. 호버 효과 */
@@ -153,17 +145,38 @@ def main():
     # CSS 적용
     apply_custom_css()
 
-    # 초기 페이지 설정
     if "page" not in st.session_state:
         st.session_state.page = "홈"
+    
+    current_page = st.session_state.page
 
-    # 페이지 라우팅
+    # 사이드바 아이템 생성
+    create_sidebar_item(
+        "홈", "홈",
+        "M240-200h120v-240h240v240h120v-360L480-740 240-560v360Zm-80 80v-480l320-240 320 240v480H520v-240h-80v240H160Zm320-350Z",
+        current_page
+    )
+
+    create_sidebar_item(
+        "사용자 위치 입력", "사용자 위치 입력",
+        "M480-80q-106 0-173-33.5T240-200q0-24 14.5-44.5T295-280l63 59q-9 4-19.5 9T322-200q13 16 60 28t98 12q51 0 98.5-12t60.5-28q-7-8-18-13t-21-9l62-60q28 16 43 36.5t15 45.5q0 53-67 86.5T480-80Zm1-220q99-73 149-146.5T680-594q0-102-65-154t-135-52q-70 0-135 52t-65 154q0 67 49 139.5T481-300Zm-1 100Q339-304 269.5-402T200-594q0-71 25.5-124.5T291-808q40-36 90-54t99-18q49 0 99 18t90 54q40 36 65.5 89.5T760-594q0 94-69.5 192T480-200Zm0-320q33 0 56.5-23.5T560-600q0-33-23.5-56.5T480-680q-33 0-56.5 23.5T400-600q0 33 23.5 56.5T480-520Zm0-80Z",
+        current_page
+    )
+
+    create_sidebar_item(
+        "챗봇", "챗봇",
+        "M440-120v-80h320v-284q0-117-81.5-198.5T480-764q-117 0-198.5 81.5T200-484v244h-40q-33 0-56.5-23.5T80-320v-80q0-21 10.5-39.5T120-469l3-53q8-68 39.5-126t79-101q47.5-43 109-67T480-840q68 0 129 24t109 66.5Q766-707 797-649t40 126l3 52q19 9 29.5 27t10.5 38v92q0 20-10.5 38T840-249v49q0 33-23.5 56.5T760-120H440Zm-80-280q-17 0-28.5-11.5T320-440q0-17 11.5-28.5T360-480q17 0 28.5 11.5T400-440q0 17-11.5 28.5T360-400Zm240 0q-17 0-28.5-11.5T560-440q0-17 11.5-28.5T600-480q17 0 28.5 11.5T640-440q0 17-11.5 28.5T600-400Zm-359-62q-7-106 64-182t177-76q89 0 156.5 56.5T720-519q-91-1-167.5-49T435-698q-16 80-67.5 142.5T241-462Z",
+        current_page
+    )
+
+
+    # --- 페이지 라우팅 ---
     if st.session_state.page == "홈":
         run_home()
     elif st.session_state.page == "사용자 위치 입력":
         run_map()
     elif st.session_state.page == "챗봇":
-        pass
+        run_chatbot()
     
 
     # menu_list = ['홈', '사용자 위치 입력', '챗봇']
