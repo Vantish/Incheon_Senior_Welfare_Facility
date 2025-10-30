@@ -1,6 +1,7 @@
 import streamlit as st
 from google import genai
 from app_around_leisure_restaurant import around_restaurant
+from app_location import run_location
 import pandas as pd
 
 LLM_MODEL = "gemini-2.5-flash"
@@ -62,21 +63,14 @@ def run_chatbot_app():
             st.chat_message("assistant").write(msg["content"])
 
     # 사이드바: 위치 입력(도로명 주소)을 받아 세션에 저장
-    # 중앙에서 한 곳(app_map)으로 위치를 설정해두고, 여기서는 그 값을 읽어 사용합니다.
-    user_loc = st.session_state.get('user_location')
-    with st.sidebar.expander('내 위치'):
-        if user_loc:
-            # 저장된 위치 표시 (기본 포맷: [lat, lon, address])
-            try:
-                addr = user_loc[2] if len(user_loc) > 2 else ''
-            except Exception:
-                addr = ''
-            st.write(f"저장된 위치:\n- 위도: {user_loc[0]}\n- 경도: {user_loc[1]}\n- 주소: {addr}")
-            if st.button('위치 삭제', key='clear_loc_btn'):
-                st.session_state.pop('user_location', None)
-                st.experimental_rerun()
+    with st.sidebar.expander('내 위치(도로명 주소) 입력'):
+        user_location = run_location()  # run_location 함수가 반드시 구현되어 있어야 합니다
+        if user_location is not None:
+            loc = (user_location[0], user_location[1])
+            st.session_state['user_location'] = loc
+            st.success('위치가 저장되었습니다. 검색 창에서 질문해 주세요.')
         else:
-            st.info("위치가 설정되어 있지 않습니다. '위치 기반 추천' (app_map)에서 도로명 주소를 입력하고 '입력' 버튼을 눌러 위치를 저장하세요.")
+            st.warning('유효한 위치를 입력해 주세요.')
 
     user_input = st.chat_input("검색창 입니다 => 여기에 입력해주세요 ")
     if user_input:
