@@ -293,8 +293,8 @@ def run_home():
                 <div class="step-number">1</div>
                 <img class="step-icon" src="https://cdn-icons-png.flaticon.com/128/11817/11817745.png">
                 <div class="step-content">
-                    <div class="step-title">왼쪽 메뉴에서 '사용자 위치 입력' 선택</div>
-                    <div class="step-desc">화면 왼쪽에 있는 메뉴에서 '사용자 위치 입력' 버튼을 눌러주세요.</div>
+                    <div class="step-title">왼쪽 메뉴에서 '시니어 시설 추천 받기' 선택</div>
+                    <div class="step-desc">화면 왼쪽에 있는 메뉴에서 '시니어 시설 추천 받기' 버튼을 눌러주세요.</div>
                 </div>
             </div>
         </div>
@@ -308,7 +308,7 @@ def run_home():
                 <img class="step-icon" src="https://cdn-icons-png.flaticon.com/128/3434/3434958.png">
                 <div class="step-content">
                     <div class="step-title">주소 입력하기</div>
-                    <div class="step-desc">본인의 위치 또는 확인하고 싶은 주소를 입력해주세요.</div>
+                    <div class="step-desc">본인의 위치 또는 확인하고 싶은 시설 도로명 주소를 입력하고,<br> 시설 유형을 선택하세요.</div>
                 </div>
             </div>
         </div>
@@ -322,7 +322,7 @@ def run_home():
                 <img class="step-icon" src="https://cdn-icons-png.flaticon.com/128/854/854878.png">
                 <div class="step-content">
                     <div class="step-title">지도에서 시설 확인</div>
-                    <div class="step-desc">지도에 나타난 추천 시설을 확인하세요. 오른쪽 목록에서 시설을 선택하면 상세 위치가 표시됩니다.</div>
+                    <div class="step-desc">지도에 나타난 추천 시설을 확인하세요. <br>가까운 시설 목록에서 시설을 선택하면 상세 위치가 표시됩니다.</div>
                 </div>
             </div>
         </div>
