@@ -5,7 +5,7 @@ from app_location import run_location
 import pandas as pd
 
 LLM_MODEL = "gemini-2.5-flash"
-DATA_PATH = './data/인천식당_카테고리_수정.csv'  # 필요에 따라 경로 조정
+
 
 
 def _init_session():
@@ -72,7 +72,8 @@ def run_chatbot_app():
         else:
             st.warning('유효한 위치를 입력해 주세요.')
 
-    user_input = st.chat_input("검색창 입니다 => 여기에 입력해주세요 ")
+    #user_input = st.chat_input("검색창 입니다 => 여기에 입력해주세요 ")
+    user_input = st.session_state('user_search_keyword', user_input)
     if user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})
 
@@ -104,7 +105,7 @@ def run_chatbot_app():
                 "아래 제공된 식당 목록 정보만을 참고하여 사용자 질문에 답변하세요.\n"
                 "목록에 없는 정보는 추측하지 말고 '목록에 없습니다'라고 응답하세요.\n"
                 "식당의 주소는 식당 목록에서 찾아서 알려주세요.\n"
-                "사용자가 음식이름을 입력했을 때 식당명과 식당 설명, top_category, sub_category를 이용해서 같은 음식 이름이 들어간 곳을 추천해주세요.\n"
+                "사용자가 음식이름을 입력했을 때 식당명과 식당 설명을 이용해서 같은 음식 이름이 들어간 곳을 추천해주세요.\n"
                 "식당의 주소를 식당 목록에서 찾고 인터넷에서 검색해서 달라진 부분이 있다면 알려주세요.\n"
             )
             prompt = system_instruction + "\n식당 목록:\n" + context_text + "\n\n질문: " + user_input
