@@ -59,7 +59,7 @@ import pickle
 
 def run_map():
     """메인 Streamlit 진입점: 지도, 근처 시설 및 추가 오버레이를 표시합니다."""
-    st.subheader('위치 기반 추천')
+    st.subheader('내 위치 찾기🔎')
     st.text('\n')
 
     # 1) 사용자 위치 획득
@@ -134,7 +134,7 @@ def run_map():
     best5 = road_results.head(5)
     best5['거리'] = best5['road_dist_m'].apply(lambda d: f"{d:.1f} m" if d < 1000 else f"{d/1000:.2f} km")
     st.write('\n')
-    st.write('시설명을 선택 하시면 경로가 갱신됩니다.')
+    st.write('시설명을 선택 하시면 경로가 갱신됩니다.🚌💨💨')
     gb = GridOptionsBuilder.from_dataframe(best5)
     gb.configure_columns(['straight_dist_m', 'road_dist_m', 'lat', 'lon'], hide=True)
     gb.configure_default_column(editable=False, sortable=True, filter=True)
@@ -179,7 +179,7 @@ def run_map():
 
     # 오른쪽: 선택된 시설 카드
     with top_right:
-        st.markdown('### 선택된 시설')
+        st.markdown('### 📌선택된 시설')
         st.write('\n')
         st.write('\n')
         try:
@@ -341,10 +341,10 @@ def run_map():
     # 7) 지도 렌더링 및 테이블/버튼 표시
     fmap_html = fmap._repr_html_()
     # 전체 너비로 지도를 표시합니다 (데이터프레임/선택카드 아래).
-    st.markdown('### 지도')
+    st.markdown('### 지도🗺️')
     st_html(fmap_html, height=680)
 
-    if '맛집' in selection or '여가시설' in selection:
+    if '맛집' in selection:
         run_chatbot_app()
 
     if bus_request:
