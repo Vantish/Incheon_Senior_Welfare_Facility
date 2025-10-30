@@ -10,7 +10,7 @@ from define import set_sidebar_background
 
 def main():
 
-    menu_list = ['홈', '위치 작성']
+    menu_list = ['홈', '사용자 위치 입력', '챗봇']
     menu_select = st.sidebar.selectbox('메뉴', menu_list)
     set_sidebar_background("./data/sb_bg.png")
 
@@ -18,6 +18,8 @@ def main():
         run_home()
     elif menu_select == menu_list[1]:
         run_map()
+    elif menu_select == menu_list[2]:
+        pass
 
 
 

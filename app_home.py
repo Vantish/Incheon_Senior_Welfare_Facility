@@ -67,7 +67,6 @@ def run_home():
     st.markdown("---")
     st.markdown("""
     **지역**: 인천광역시  
-    **기술 스택**: Python, Streamlit, OpenAPI
     """)
 
     
