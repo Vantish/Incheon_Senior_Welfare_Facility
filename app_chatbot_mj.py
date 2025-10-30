@@ -7,7 +7,6 @@ import pandas as pd
 LLM_MODEL = "gemini-2.5-flash"
 
 
-
 def _init_session():
     if "messages" not in st.session_state:
         st.session_state.messages = [
@@ -43,11 +42,9 @@ def looks_like_food_request(text: str) -> bool:
 
 
 def run_chatbot_app():
- 
-
     _init_session()
 
-    st.title("사용자 근처의 식당을 추천해드립니다")
+    st.subheader("사용자 근처의 식당을 추천해드립니다")
     st.subheader("찾아보고 싶은 식당 또는 음식을 말씀해주세요 :")
 
     client = _get_client()
@@ -62,62 +59,56 @@ def run_chatbot_app():
         else:
             st.chat_message("assistant").write(msg["content"])
 
-    # 사이드바: 위치 입력(도로명 주소)을 받아 세션에 저장
-    with st.sidebar.expander('내 위치(도로명 주소) 입력'):
-        user_location = run_location()  # run_location 함수가 반드시 구현되어 있어야 합니다
-        if user_location is not None:
-            loc = (user_location[0], user_location[1])
-            st.session_state['user_location'] = loc
-            st.success('위치가 저장되었습니다. 검색 창에서 질문해 주세요.')
-        else:
-            st.warning('유효한 위치를 입력해 주세요.')
+    loc = st.session_state.get("user_location", None)
+    if not loc:
+        st.warning("2번 파일에서 위치를 먼저 입력해주세요.")
 
-    #user_input = st.chat_input("검색창 입니다 => 여기에 입력해주세요 ")
-    user_input = st.session_state('user_search_keyword', user_input)
-    if user_input:
-        st.session_state.messages.append({"role": "user", "content": user_input})
+    with st.expander('검색창 입니다', expanded=True):
+        user_input = st.chat_input("=>여기에 입력해주세요 ")
+        if user_input:
+            st.session_state.messages = [
+                {"role": "assistant", "content": "안녕하세요! 무엇을 도와드릴까요?"}
+            ]
+            st.session_state.messages.append({"role": "user", "content": user_input})
 
-        if looks_like_food_request(user_input):
-            user_loc = st.session_state.get('user_location')
-            if not user_loc:
-                assistant_text = '맛집 추천을 위해 옆에서 도로명 주소를 입력하고 입력 버튼을 눌러 위치를 저장해 주세요.'
-                st.session_state.messages.append({"role": "assistant", "content": assistant_text})
-                st.rerun()
+            if looks_like_food_request(user_input):
+                user_loc = st.session_state.get('user_location')
+                if not user_loc:
+                    st.session_state.messages.append({"role": "assistant", "content": assistant_text})
 
-            latlon = (user_loc[0], user_loc[1])
-            df_rec = around_restaurant(latlon)  # around_restaurant 함수가 구현되어 있어야 합니다
-            if df_rec is None or df_rec.empty:
-                assistant_text = '해당 위치 주변에서 추천할 만한 식당을 찾지 못했습니다.'
-                st.session_state.messages.append({"role": "assistant", "content": assistant_text})
-                st.rerun()
+                latlon = (user_loc[0], user_loc[1])
+                df_rec = around_restaurant(latlon)
+                if df_rec is None or df_rec.empty:
+                    assistant_text = '해당 위치 주변에서 추천할 만한 식당을 찾지 못했습니다.'
+                    st.session_state.messages.append({"role": "assistant", "content": assistant_text})
 
-            lines = []
-            for i, row in df_rec.head(20).iterrows():
-                name = row.get('상호', '')
-                addr = row.get('도로명 주소', '')
-                dist = row.get('거리(km)')
-                dist_text = f"{dist:.2f}km" if pd.notna(dist) else ''
-                lines.append(f"[{i + 1}] {name} / {addr} / {dist_text}")
+                lines = []
+                for i, row in df_rec.head(20).iterrows():
+                    name = row.get('상호', '')
+                    addr = row.get('도로명 주소', '')
+                    dist = row.get('거리(km)')
+                    dist_text = f"{dist:.2f}km" if pd.notna(dist) else ''
+                    lines.append(f"[{i + 1}] {name} / {addr} / {dist_text}")
 
-            context_text = "\n".join(lines)
+                context_text = "\n".join(lines)
 
-            system_instruction = (
-                "아래 제공된 식당 목록 정보만을 참고하여 사용자 질문에 답변하세요.\n"
-                "목록에 없는 정보는 추측하지 말고 '목록에 없습니다'라고 응답하세요.\n"
-                "식당의 주소는 식당 목록에서 찾아서 알려주세요.\n"
-                "사용자가 음식이름을 입력했을 때 식당명과 식당 설명을 이용해서 같은 음식 이름이 들어간 곳을 추천해주세요.\n"
-                "식당의 주소를 식당 목록에서 찾고 인터넷에서 검색해서 달라진 부분이 있다면 알려주세요.\n"
-            )
-            prompt = system_instruction + "\n식당 목록:\n" + context_text + "\n\n질문: " + user_input
+                system_instruction = (
+                    "아래 제공된 식당 목록 정보만을 참고하여 사용자 질문에 답변하세요.\n"
+                    "목록에 없는 정보는 추측하지 말고 '목록에 없습니다'라고 응답하세요.\n"
+                    "식당의 주소는 식당 목록에서 찾아서 알려주세요.\n"
+                    "사용자가 음식이름을 입력했을 때 식당명과 식당 설명을 이용해서 같은 음식 이름이 들어간 곳을 추천해주세요.\n"
+                    "식당의 주소를 식당 목록에서 찾고 인터넷에서 검색해서 달라진 부분이 있다면 알려주세요.\n"
+                    "중복된 내용이 있다면 한번만 출력 해주세요\n"
+                )
+                prompt = system_instruction + "\n식당 목록:\n" + context_text + "\n\n질문: " + user_input
 
-            with st.spinner('추천 기반으로 응답 생성 중...'):
-                try:
-                    reply_text = _generate_reply(client, LLM_MODEL, prompt)
-                except Exception as e:
-                    reply_text = f'응답 생성 중 오류가 발생했습니다: {e}'
+                with st.spinner('추천 기반으로 응답 생성 중...'):
+                    try:
+                        reply_text = _generate_reply(client, LLM_MODEL, prompt)
+                    except Exception as e:
+                        reply_text = f'응답 생성 중 오류가 발생했습니다: {e}'
 
-            st.session_state.messages.append({"role": "assistant", "content": reply_text})
-            st.rerun()
+                st.session_state.messages.append({"role": "assistant", "content": reply_text})
 
         else:
             system_instruction = (
@@ -128,7 +119,6 @@ def run_chatbot_app():
                 "검색 지역은 '인천' 으로 한정합니다"
                 "모르는건 모른다고 답하세요"
                 "식당의 주소를 식당 목록에서 찾고 인터넷에서 검색해서 달라진 부분이 있다면 알려주세요.\n"
-                
             )
             conversation_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages])
             prompt = system_instruction + "\n\n" + conversation_text
@@ -140,7 +130,7 @@ def run_chatbot_app():
                     reply_text = f"오류가 발생했습니다: {e}"
 
             st.session_state.messages.append({"role": "assistant", "content": reply_text})
-            st.rerun()
+
 
 
 if __name__ == '__main__':

@@ -7,7 +7,7 @@ from app_around_leisure_restaurant import around_restaurant
 from app_location import run_location
 from define import find_nearest_facilities, make_popup, draw_route_on_map, to_pylist, normalize_routes_output, extract_stop_list, _haversine_m
 
-
+from app_chatbot_mj import run_chatbot_app
 import numpy as np
 import pandas as pd
 import folium
@@ -297,10 +297,7 @@ def run_map():
         except Exception:
             st.warning('여가시설 정보를 불러오는 중 오류가 발생했습니다.')
 
-    if '맛집' in selection or '여가시설' in selection:
-        user_input = st.text_input('근처 맛집/여가시설 검색어 입력 (예: "카페", "공원")', value='', key = 'user_search_keyword')
-
-
+        
     # 정류장 마커 및 테이블 준비
     bus_request = False
     if '정류장' in selection:
@@ -346,6 +343,9 @@ def run_map():
     # 전체 너비로 지도를 표시합니다 (데이터프레임/선택카드 아래).
     st.markdown('### 지도')
     st_html(fmap_html, height=680)
+
+    if '맛집' in selection :
+        run_chatbot_app()
 
     if bus_request:
         st.markdown('### 근처 정류장 (사용자 / 시설)')
