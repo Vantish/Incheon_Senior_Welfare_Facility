@@ -114,7 +114,7 @@ def find_nearest_facilities(user_location, facilities_df: pd.DataFrame, return_c
             if os.path.exists(graph_cache_path):
                 with open(graph_cache_path, 'rb') as fh:
                     G = pickle.load(fh)
-                # nearest nodes for user and candidates
+                # 사용자와 후보 정류소에 대한 최단거리 노드를 찾음
                 user_node = ox.nearest_nodes(G, ulon, ulat)
                 cand_nodes = ox.nearest_nodes(G, candidates[lon_col].tolist(), candidates[lat_col].tolist())
                 lengths = []
@@ -143,9 +143,9 @@ def find_nearest_facilities(user_location, facilities_df: pd.DataFrame, return_c
 
 
 def make_popup(text, width=240):
-    """Create a folium.Popup with safe escaping and simple line-wrapping.
+    """HTML 이스케이프와 간단한 줄바꿈을 적용한 Folium 팝업을 생성합니다.
 
-    Returns a folium.Popup ready to add to a map.
+    반환값: 지도에 추가할 수 있는 folium.Popup 객체
     """
     s = str(text)
     if '<br>' in s:
@@ -159,12 +159,12 @@ def make_popup(text, width=240):
 
 
 def draw_route_on_map(fmap, ulat, ulon, target_lat, target_lon, graph_cache_path: str = GRAPH_CACHE_PATH):
-    """Try to draw a road-based route on fmap using cached osmnx graph.
+    """캐시된 osmnx 그래프를 사용해 도로 기반 경로를 지도에 그리려고 시도합니다.
 
-    If osmnx/graph not available or routing fails, draws a straight line instead.
-    Returns True if road-based route was drawn, False if straight-line fallback used (or nothing drawn).
+    osmnx 또는 그래프가 없거나 라우팅에 실패하면 사용자-목표를 직선으로 연결합니다.
+    반환값: 도로 기반 경로를 성공적으로 그렸으면 True, 그렇지 않으면 False
     """
-    # prefer using installed osmnx if available
+    # osmnx가 설치되어 있으면 이를 우선 사용
     if _OSM:
         try:
             G = None
@@ -176,13 +176,13 @@ def draw_route_on_map(fmap, ulat, ulon, target_lat, target_lon, graph_cache_path
                     user_node = ox.nearest_nodes(G, ulon, ulat)
                     target_node = ox.nearest_nodes(G, target_lon, target_lat)
                     route = nx.shortest_path(G, user_node, target_node, weight='length')
-                    # try node coords first
+                    # 먼저 노드 좌표를 사용해 시도
                     try:
                         coords = [(float(G.nodes[n]['y']), float(G.nodes[n]['x'])) for n in route]
                         folium.PolyLine(locations=coords, color='green', weight=4, opacity=0.8).add_to(fmap)
                         return True
                     except Exception:
-                        # fall back to edge geometry if present
+                        # 에지(간선) 지오메트리가 있으면 이를 사용해 대체
                         edge_geoms = []
                         for u, v in zip(route[:-1], route[1:]):
                             data = G.get_edge_data(u, v)
@@ -200,12 +200,12 @@ def draw_route_on_map(fmap, ulat, ulon, target_lat, target_lon, graph_cache_path
                             folium.PolyLine(locations=edge_geoms, color='green', weight=4, opacity=0.8).add_to(fmap)
                             return True
                 except Exception:
-                    # routing failed
+                    # 라우팅에 실패함
                     pass
         except Exception:
             pass
 
-    # fallback: straight line
+    # 대체: 직선으로 표시
     try:
         folium.PolyLine(locations=[[ulat, ulon], [target_lat, target_lon]], color='green').add_to(fmap)
     except Exception:
@@ -214,7 +214,10 @@ def draw_route_on_map(fmap, ulat, ulon, target_lat, target_lon, graph_cache_path
 
 
 def _find_lat_lon_cols(df):
-    """Return (lat_col, lon_col) names if found, else (None, None). Tries common variations."""
+    """DataFrame에서 위도/경도 컬럼명을 찾아 (lat_col, lon_col) 튜플로 반환합니다.
+
+    일반적으로 사용하는 후보 이름들을 검사합니다. 찾지 못하면 (None, None)을 반환합니다.
+    """
     if df is None or df.shape[0] == 0:
         return None, None
     cols = list(df.columns)
@@ -237,8 +240,122 @@ def _find_lat_lon_cols(df):
     return lat_col, lon_col
 
 
+# ----------------------- 챗봇 관련 헬퍼 (데이터 로드 / TF-IDF 폴백) -----------------------
+ALLOWED_FILES = [
+    '2209_노인복지론_1~14주.pdf',
+    '2025+노인보건복지사업안내(1권).pdf',
+    '2025+노인보건복지사업안내(2권).pdf',
+    '국민건강보험공단_건강검진정보_2024.CSV',
+    'incheon_health_check_centers.csv',
+]
+
+
+def extract_text_from_pdf(path: str) -> str:
+    """PDF에서 텍스트를 추출합니다. pypdf 우선, 실패하면 빈 문자열 반환."""
+    try:
+        from pypdf import PdfReader
+    except Exception:
+        try:
+            import PyPDF2
+            PdfReader = PyPDF2.PdfReader
+        except Exception:
+            return ''
+
+    try:
+        reader = PdfReader(path)
+        parts = []
+        for p in reader.pages:
+            try:
+                t = p.extract_text() or ''
+            except Exception:
+                t = ''
+            if t:
+                parts.append(t)
+        return '\n\n'.join(parts)
+    except Exception:
+        return ''
+
+
+def load_allowed_corpus(data_dir: str = './data'):
+    """허용된 파일들만 읽어 (source, text) 리스트를 반환합니다.
+
+    반환값: [{'source': fname, 'text': text}, ...]
+    """
+    out = []
+    base = os.path.abspath(data_dir)
+    for fname in ALLOWED_FILES:
+        fpath = os.path.join(base, fname)
+        if not os.path.exists(fpath):
+            continue
+        lower = fname.lower()
+        if lower.endswith('.pdf'):
+            txt = extract_text_from_pdf(fpath)
+            if txt:
+                out.append({'source': fname, 'text': txt})
+        elif lower.endswith('.csv'):
+            try:
+                df = pd.read_csv(fpath, encoding='utf-8')
+            except Exception:
+                try:
+                    df = pd.read_csv(fpath, encoding='cp949')
+                except Exception:
+                    df = None
+            if df is not None:
+                preview = df.head(100).to_dict(orient='records')
+                txt = f"CSV: {fname}\nrows: {len(df)}\nsample: {preview}"
+                out.append({'source': fname, 'text': txt})
+    return out
+
+
+def build_tfidf_index(docs: list):
+    """문서 리스트({'text','source'})로 TF-IDF 벡터화된 인덱스를 반환합니다.
+
+    반환: {'vectorizer': vec, 'matrix': mat, 'docs': docs}
+    """
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    texts = [d.get('text', '') for d in docs]
+    vec = TfidfVectorizer(stop_words='english')
+    try:
+        mat = vec.fit_transform(texts)
+    except Exception:
+        # 매우 큰 텍스트에서 메모리 오류가 날 수 있으므로 부분 텍스트로 처리
+        short_texts = [t[:10000] for t in texts]
+        mat = vec.fit_transform(short_texts)
+    return {'type': 'tfidf', 'vectorizer': vec, 'matrix': mat, 'docs': docs}
+
+
+def retrieve_tfidf_contexts(index, query: str, top_k: int = 3):
+    """TF-IDF 인덱스에서 상위 top_k 문서를 검색하여 (text, source) 리스트 반환."""
+    from sklearn.metrics.pairwise import cosine_similarity
+    vec = index['vectorizer']
+    mat = index['matrix']
+    docs = index['docs']
+    qv = vec.transform([query])
+    sims = cosine_similarity(qv, mat).flatten()
+    idxs = sims.argsort()[::-1][:top_k]
+    out = []
+    for i in idxs:
+        out.append({'text': docs[i].get('text', ''), 'source': docs[i].get('source', '')})
+    return out
+
+
+def build_system_prompt():
+    """사용자 요구에 맞춘 시스템 프롬프트(한국어)를 반환합니다."""
+    return (
+        "당신은 나이 많은 노인분들의 건강 및 노인복지 관련 질문을 답변해주는 AI 어시스턴트입니다. "
+        "주 사용자가 노인분들이므로 항상 상냥하고 존중하는 말투로 응답하세요. "
+        "사용자가 나이를 입력하면 그 나이에 유의해야 할 건강 정보를 구체적으로 알려주시고, 사용자의 건강 상태를 알려주면 개선점과 권장 행동을 제안하세요. "
+        "필요하면 사용자의 생활습관을 부드럽게 추가 질문해도 됩니다. "
+        "건강·노인복지 관련 질문이 아닌 경우, 바로 거절하지 말고 어르신의 입장을 배려해 부드럽게 다른 질문으로 유도하세요. "
+        "답변 시 반드시 로컬 자료(data 폴더의 지정된 파일들)에서 검색(RAG)한 근거로만 답변하세요."
+        "만약 사용자 근처에 추천할만한 시설을 안내해야 할 경우, 사용자의 현재 위치 정보를 요청하고, "\
+        "그 위치를 바탕으로 가장 가까운 시설들을 안내하세요."
+    )
+
+
+
 def _ensure_coord_aliases(df, src_lat, src_lon):
-    """Create standardized coordinate columns and common aliases. Returns a copy."""
+    """표준화된 좌표 컬럼(lat, lon)과 흔히 쓰이는 별칭들을 생성하여 복사본을 반환합니다."""
     df = df.copy()
     try:
         df['lat'] = pd.to_numeric(df[src_lat].astype(str).str.replace(',', '').str.strip(), errors='coerce')
@@ -338,12 +455,12 @@ def build_busroute_index(df: pd.DataFrame):
     if df is None or df.empty or stop_col is None or route_col is None:
         return stop_to_routes, route_to_stops
 
-    # normalize strings
+    # 문자열 정규화
     df2 = df.copy()
     df2[stop_col] = df2[stop_col].astype(str).str.strip()
     df2[route_col] = df2[route_col].astype(str).str.strip()
 
-    # group by route to build ordered stop lists when seq_col exists
+    # 노선별로 그룹화하여 순번(seq)이 있는 경우 정렬된 정류장 목록을 만듭니다
     if seq_col and seq_col in df2.columns:
         try:
             df2[seq_col] = pd.to_numeric(df2[seq_col], errors='coerce')
@@ -362,7 +479,7 @@ def build_busroute_index(df: pd.DataFrame):
 
     # 정렬: seq가 있으면 seq 기준 정렬 후 sid 리스트로 변환
     for rno, seq_sid_list in list(route_to_stops.items()):
-        # seq_sid_list: list of (seq, sid)
+    # seq_sid_list: (순번, 정류소ID) 튜플들의 리스트
         if any(x[0] is not None for x in seq_sid_list):
             seq_sorted = sorted([x for x in seq_sid_list if x[0] is not None], key=lambda t: (t[0] if t[0] is not None else 1e9))
             sids = [sid for _, sid in seq_sorted]
@@ -421,7 +538,7 @@ def extract_stop_list(obj) -> list:
             name = None
             if id_col and id_col in r.index:
                 sid = r[id_col]
-            # fallback key names
+            # 대체 키 이름 검사
             if sid is None:
                 for k in id_candidates:
                     if k in r.index:
@@ -450,29 +567,27 @@ def extract_stop_list(obj) -> list:
     out.append((str(obj), ''))
     return out
 
-
 def normalize_routes_output(routes_obj) -> dict:
-    """Normalize various possible outputs from check_bus_route into a strict dict of plain Python types.
+    """`check_bus_route`의 다양한 출력 형식을 평탄한 파이썬 자료형 딕셔너리로 정규화합니다.
 
-    Returned schema:
+    반환 스키마 예:
       {
-        '사용자 근처': { '<stop>': ['route1','route2', ...], ... },
-        '시설 근처': { '<stop>': ['route1', ...], ... },
-        'direct_routes': ['routeA', ...],
+        '사용자 근처': { '<정류소명 또는 id>': ['노선A','노선B', ...], ... },
+        '시설 근처': { '<정류소명 또는 id>': ['노선X', ...], ... },
+        'direct_routes': ['노선A', ...],
         'direct_connections': [ {'route':r, 'user_stop':u, 'facility_stop':f}, ... ]
       }
 
-    This function accepts dict-like inputs or other types and will coercively convert
-    DataFrame / Series / ndarray / list / tuple / set into lists of strings where
-    appropriate. The goal is to make the consumer code free from pandas objects so
-    boolean checks like `if x:` won't accidentally evaluate a DataFrame.
+    이 함수는 dict 형태 이외의 입력(데이터프레임, 시리즈, 배열, 리스트 등)을
+    강제 변환하여 문자열 리스트로 만들고, 호출자 코드가 pandas 객체의
+    불명확한 불리언 평가에 의해 오류가 나지 않도록 안전하게 만듭니다.
     """
     out = {'사용자 근처': {}, '시설 근처': {}, 'direct_routes': [], 'direct_connections': []}
 
     if not isinstance(routes_obj, dict):
         return out
 
-    # helper to coerce a value into list of route-strings
+    # 값들을 문자열 노선 리스트로 강제 변환하는 헬퍼
     def _to_route_strings(v):
         items = to_pylist(v)
         result = []
@@ -508,7 +623,7 @@ def normalize_routes_output(routes_obj) -> dict:
                     result.append(s)
         return result
 
-    # 사용자 근처 / 시설 근처 - allow English fallback keys
+    # 사용자 근처 / 시설 근처 - 영어 키 이름도 허용하여 유연하게 처리
     user_keys = ('사용자 근처', 'user', 'user_nearby', 'user_stops')
     fac_keys = ('시설 근처', 'facility', 'facility_nearby', 'facility_stops')
 
@@ -531,11 +646,11 @@ def normalize_routes_output(routes_obj) -> dict:
         for stop, v in fac_src.items():
             out['시설 근처'][str(stop)] = _to_route_strings(v)
 
-    # direct_routes
+    # direct_routes (직접 연결 노선)
     direct = routes_obj.get('direct_routes') or routes_obj.get('direct') or []
     out['direct_routes'] = [str(x).strip() for x in to_pylist(direct) if str(x).strip()]
 
-    # direct_connections: ensure each dict has string fields
+    # direct_connections: 각 항목을 문자열 필드로 정규화
     dc = to_pylist(routes_obj.get('direct_connections', []))
     normalized_dc = []
     for item in dc:

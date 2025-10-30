@@ -6,3 +6,7 @@ folium
 # optional for road-based routing (can be omitted to use straight-line fallback)
 osmnx
 networkx
+
+google-generativeai
+google-genai
+genai
