@@ -1,8 +1,9 @@
 import streamlit as st
+from app_chatbot_mj import run_chatbot_app
 from app_home import run_home
 from app_map import run_map
+from app_chatbot_JS import run_chatbot
 from define import set_sidebar_background
-
 
 
 # 메인에서는 각 함수를 돌립니다.
