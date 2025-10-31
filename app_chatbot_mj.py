@@ -1,5 +1,5 @@
 import streamlit as st
-from google import genai
+import google.generativeai as genai
 from app_around_leisure_restaurant import around_restaurant
 import pandas as pd
 

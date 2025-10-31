@@ -36,11 +36,11 @@ def main():
         """, unsafe_allow_html=True)
 
         # 🔹 페이지 버튼
-        if st.button("🏠  홈", key="home", use_container_width=True):
+        if st.button("홈", key="home", use_container_width=True):
             st.session_state.page = "홈"
-        if st.button("⛺  시니어 시설 추천 받기", key="map", use_container_width=True):
+        if st.button("시니어 시설 추천 받기", key="map", use_container_width=True):
             st.session_state.page = "시니어 시설 추천 받기"
-        if st.button("💬  시니어 건강 상담사", key="chatbot", use_container_width=True):
+        if st.button("시니어 건강 상담사", key="chatbot", use_container_width=True):
             st.session_state.page = "시니어 건강 상담사"
 
     # 🔹 페이지 내용
@@ -49,9 +49,9 @@ def main():
 
     if st.session_state.page == "홈":
         run_home()
-    elif st.session_state.page == "사용자 위치 입력":
+    elif st.session_state.page == "시니어 시설 추천 받기":
         run_map()
-    elif st.session_state.page == "챗봇":
+    elif st.session_state.page == "시니어 건강 상담사":
         run_chatbot()
 
     # menu_list = ['홈', '시니어 시설 추천 받기', '건강 상담사']
