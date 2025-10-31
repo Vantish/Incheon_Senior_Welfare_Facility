@@ -16,10 +16,10 @@ Streamlit 기반 위치기반 추천(POI recommendation) 애플리케이션입�
   반경 10km 이내에서 인천 지역 내 노인복지시설과 연계된 다중 POI를 사용자 맞춤형으로 추천  
 
 - **부가 기능**  
-  Folium 기반 공간 데이터 시각화 및 경로망 최적화(Path Optimization)를 통한 효율적 이동성 평가 지원  
+    gemini 2.5 flash -geminiAI를 이용한 자연어처리 챗봇으로 건강과 맛집 추천 하는 AI챗봇
 
 - **주요 대상**  
-  노인복지 커뮤니티 이용자, 보호자, 지방자치단체 정책 담당자, 일반 사용자 등
+  노인복지 커뮤니티 이용자, 노인 가구가 있는 보호자, 지방자치단체 정책 담당자, 일반 사용자 등
 
 ***
 
@@ -29,15 +29,15 @@ Streamlit 기반 위치기반 추천(POI recommendation) 애플리케이션입�
   Kakao Maps REST API 및 로컬 좌표 변환 모듈을 활용한 정밀 주소-좌표 변환 수행  
 
 - **근접도 분석**  
-  Haversine 공식 기반 대원거리(Geodesic Distance) 산정 및  
-  scikit-learn KNN 모델 적용을 통한 다차원 공간 내 최단거리 기반 근접시설 탐색  
+  Haversine 공식 기반
+  osmnx와 networks를 통한 도로기반 거리탐색
 
 - **다중 POI 융합**  
   버스 정류장, 식음료 위생시설, 문화·체육 인프라 등 POI 데이터 통합 및 다중 기준 다중 대상 추천 시스템 구축  
 
 - **공간 시각화 및 UI/UX**  
   Folium과 branca를 활용한 지리공간 데이터 시각화와  
-  Streamlit 기반 반응형 사용자 인터페이스 구현  
+
 
 ***
 
@@ -46,9 +46,9 @@ Streamlit 기반 위치기반 추천(POI recommendation) 애플리케이션입�
 - 언어: Python 3.10+  
 - 웹 프레임워크: Streamlit (대화형 대시보드 및 사용자 인터페이스)  
 - 데이터 처리: pandas, numpy  
-- 지리 공간 연산: geopy, haversine, shapely, geopandas (선택)  
-- 머신러닝/추천: scikit-learn (NearestNeighbors, KNN), scipy, Gemini AI 기반 자연어처리 챗봇  
-- 지리 시각화: folium, branca  
+- 거리 연산 및 분석 : osmnx, networkx, Haversine
+- 머신러닝/추천: gemini 2.5 flash
+- 시각화: folium, branca , st_aggrid, Streamlit, polyline
 - API 통신: requests  
 - 배포 및 환경관리: Docker (선택), pip + requirements.txt  
 
@@ -79,7 +79,7 @@ streamlit run app_main.py
 ##  활용 시나리오
 
 - 사용자 입력 기반 실시간 위경도 변환 및 근접 노인복지시설 도출  
-- 시설별 상세 정보 및 주변 맛집, 버스정류장 등 POI 정보 제공  
+- 시설별 주소 및 주변 맛집, 버스정류장 등 POI 정보 제공  
 - 고령자 친화적 UX/UI로 직관적 지도 인터페이스 제공
 
 ***
