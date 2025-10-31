@@ -23,7 +23,7 @@ def _get_client():
         return None
     return genai.Client(api_key=api_key)
 
-def _generate_reply(client, model, prompt):
+def stream_general_reply(client, model, prompt):
     try:
         response = client.models.generate_content(
             model=model,
@@ -152,9 +152,11 @@ def run_chatbot_app():
                 if not user_loc:
                     st.session_state.messages.append({"role": "assistant", "content": "먼저 위치를 입력하세요."})
                     return
+            with st.spinner('추천 기반으로 응답 생성 중...'):
                 reply = generate_food_recommendation(st.session_state.client, user_input, user_loc)
                 st.session_state.messages.append({"role": "assistant", "content": reply})
-            else:
+        else:
+            with st.spinner("검색 기반 응답 생성 중..."):
                 reply = stream_general_reply(st.session_state.client, st.session_state.messages)
                 st.session_state.messages.append({"role": "assistant", "content": reply})
 
