@@ -18,12 +18,19 @@ def looks_like_food_request(text: str) -> bool:
     return False
 
 def _get_client():
+    # 1. secrets에서 API 키를 가져옵니다.
     api_key = st.secrets.get("GEMINI_API_KEY_mj")
+    
     if not api_key:
         return None
-    return genai.Client(api_key=api_key)
+    
+    # 2. API 키를 라이브러리에 설정합니다.
+    genai.configure(api_key=api_key)
+    
+    # 3. 'gemini-2.5-flash' 모델 객체를 생성하여 반환합니다.
+    return genai.GenerativeModel('gemini-2.5-flash')
 
-def stream_general_reply(client, model, prompt):
+def _generate_reply(client, model, prompt):
     try:
         response = client.models.generate_content(
             model=model,
@@ -110,7 +117,7 @@ def stream_general_reply(client, messages):
 
 def run_chatbot_app():
     st.markdown(
-    "<h3 style='color: orange;'>사용자 근처의 식당을 추천해주는 AI💻</h3>", 
+    "<h3 style='color: orange;'>사용자 근처의 식당과 시설을 추천해주는 AI💻</h3>", 
     unsafe_allow_html=True
 )
     st.text("📍 찾아보고 싶은 식당 또는 음식을 말씀해주세요 : 예) 여기 근처 중식당 찾아줘")
@@ -152,11 +159,9 @@ def run_chatbot_app():
                 if not user_loc:
                     st.session_state.messages.append({"role": "assistant", "content": "먼저 위치를 입력하세요."})
                     return
-            with st.spinner('추천 기반으로 응답 생성 중...'):
                 reply = generate_food_recommendation(st.session_state.client, user_input, user_loc)
                 st.session_state.messages.append({"role": "assistant", "content": reply})
-        else:
-            with st.spinner("검색 기반 응답 생성 중..."):
+            else:
                 reply = stream_general_reply(st.session_state.client, st.session_state.messages)
                 st.session_state.messages.append({"role": "assistant", "content": reply})
 
