@@ -26,7 +26,7 @@ def get_bmi_category(bmi):
         return "고도비만"
 
 def get_health_tip(bmi, bp_sys, bp_dia, fbs, waist, gender):
-    """건강 정보를 바탕으로 맞춤형 건강 팁을 따뜻하게 드립니다."""
+    """건강 정보를 바탕으로 맞춤형 건강 팁을 드립니다."""
     tips = []
     bmi_category = get_bmi_category(bmi)
     if bmi_category == "저체중":
@@ -55,7 +55,7 @@ def get_health_tip(bmi, bp_sys, bp_dia, fbs, waist, gender):
 
 def run_chatbot_hhr():
     st.title("🏥 인천 노인을 위한 도우미 챗봇")
-    st.write("건강검진과 복지 정보를 따뜻하게 안내드리는 챗봇입니다. 궁금하신 점을 편하게 물어보세요!")
+    st.write("건강검진과 복지 정보를 안내드리는 챗봇입니다. 궁금하신 점을 편하게 물어보세요!")
 
     # Gemini 클라이언트 초기화
     try:
@@ -160,90 +160,106 @@ def run_chatbot_hhr():
         st.markdown("- 검진을 받기 위해 필요한 서류는 무엇인가요?")
         st.markdown("- 검진 후 결과는 언제 알 수 있나요?")
 
-    # 복지 프로그램 안내 (Gemini 연결)
-    with st.expander("복지 프로그램 안내", expanded=False):
-        st.markdown("복지 관련 궁금한 점을 아래 항목별로 선택해서 물어보세요 😊")
+    # 복지 프로그램 안내
+    with st.expander("노인일자리", expanded=False):
+        st.markdown("노인일자리 관련 궁금한 점을 물어보세요!")
+        welfare_job = st.text_input("노인일자리 관련 질문을 입력해 주세요 (예: 인천 노인일자리 프로그램은?):", key="welfare_job")
+        if welfare_job:
+            with st.spinner("노인일자리 정보를 불러오는 중입니다..."):
+                try:
+                    model = genai.GenerativeModel('gemini-2.5-flash')
+                    prompt = f"""
+                    노인분들께 서비스를 드리는 챗봇이니 친절하고 따뜻하게, 존댓말로 답변하되 사용자를 지칭하는 말은 빼주세요.
+                    쉬운 용어를 사용해서 알기 쉽게 설명해 주세요.
+                    인천광역시의 노인일자리 프로그램(공익활동, 시장형 사업단, 사회서비스형 등)에 대해 정확한 정보를 제공해 주세요.
+                    정보가 없으면 일반적인 노인일자리 정보를 알려드려도 됩니다.
+                    질문: {welfare_job}
+                    """
+                    response = model.generate_content(prompt)
+                    st.markdown("**노인일자리 정보**")
+                    st.markdown(response.text)
+                except Exception as e:
+                    st.error(f"노인일자리 정보 검색 중 오류가 발생했어요: {str(e)}. 다시 시도해 주세요!")
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "💰 지원금 및 혜택", 
-        "🏠 복지시설 및 서비스", 
-        "🧓 돌봄·요양", 
-        "🎨 여가·문화활동", 
-        "📞 긴급지원·상담"
-    ])
+    with st.expander("지원금 및 혜택", expanded=False):
+        st.markdown("지원금 및 혜택 관련 궁금한 점을 물어보세요!")
+        welfare_benefit = st.text_input("지원금 관련 질문을 입력해 주세요 (예: 기초연금 신청 방법은?):", key="welfare_benefit")
+        if welfare_benefit:
+            with st.spinner("지원금 정보를 불러오는 중입니다..."):
+                try:
+                    model = genai.GenerativeModel('gemini-2.5-flash')
+                    prompt = f"""
+                    노인분들께 서비스를 드리는 챗봇이니 친절하고 따뜻하게, 존댓말로 답변하되 사용자를 지칭하는 말은 빼주세요.
+                    쉬운 용어를 사용해서 알기 쉽게 설명해 주세요.
+                    인천광역시의 노인 관련 지원금, 연금, 감면제도(기초연금, 노인교통비 지원 등)에 대해 정확한 정보를 제공해 주세요.
+                    정보가 없으면 일반적인 지원금 정보를 알려드려도 됩니다.
+                    질문: {welfare_benefit}
+                    """
+                    response = model.generate_content(prompt)
+                    st.markdown("**지원금 및 혜택 정보**")
+                    st.markdown(response.text)
+                except Exception as e:
+                    st.error(f"지원금 정보 검색 중 오류가 발생했어요: {str(e)}. 다시 시도해 주세요!")
 
-    # 각 탭마다 질문 입력창과 Gemini 호출 기능 연결
-    with tab1:
-        st.subheader("💰 지원금 및 혜택")
-        welfare_q1 = st.text_input("지원금 관련 질문을 입력해 주세요", key="welfare_benefit")
-        if welfare_q1:
-            with st.spinner("복지 정보를 불러오는 중입니다..."):
-                model = genai.GenerativeModel("gemini-1.5-flash-latest")
-                prompt = f"""
-                당신은 인천시 노인복지 도우미 챗봇입니다.
-                노인에게 지급되는 각종 복지 지원금, 연금, 감면제도에 대해 
-                친절하고 따뜻한 존댓말로 알기 쉽게 설명해 주세요.
-                질문: {welfare_q1}
-                """
-                answer = model.generate_content(prompt)
-                st.markdown(answer.text)
-
-    with tab2:
-        st.subheader("🏠 복지시설 및 서비스")
-        welfare_q2 = st.text_input("시설이나 복지서비스에 대해 궁금한 점을 입력해 주세요", key="welfare_service")
-        if welfare_q2:
-            with st.spinner("복지시설 정보를 찾는 중입니다..."):
-                model = genai.GenerativeModel("gemini-1.5-flash-latest")
-                prompt = f"""
-                당신은 인천시 노인복지 안내 챗봇입니다.
-                복지관, 경로당, 요양원, 재가복지센터 등 노인시설과 복지서비스 정보를 설명해 주세요.
-                질문: {welfare_q2}
-                """
-                answer = model.generate_content(prompt)
-                st.markdown(answer.text)
-
-    with tab3:
-        st.subheader("🧓 돌봄·요양")
-        welfare_q3 = st.text_input("돌봄서비스나 요양 관련 질문을 입력해 주세요", key="welfare_care")
-        if welfare_q3:
+    with st.expander("돌봄·요양", expanded=False):
+        st.markdown("돌봄·요양 관련 궁금한 점을 물어보세요!")
+        welfare_care = st.text_input("돌봄서비스나 요양 관련 질문을 입력해 주세요 (예: 방문요양 신청 방법은?):", key="welfare_care")
+        if welfare_care:
             with st.spinner("돌봄 서비스 정보를 불러오는 중입니다..."):
-                model = genai.GenerativeModel("gemini-1.5-flash-latest")
-                prompt = f"""
-                당신은 인천시 노인 돌봄 도우미 챗봇입니다.
-                방문요양, 노인맞춤돌봄서비스, 요양보호사 지원제도 등에 대해
-                따뜻하고 공손하게 설명해 주세요.
-                질문: {welfare_q3}
-                """
-                answer = model.generate_content(prompt)
-                st.markdown(answer.text)
+                try:
+                    model = genai.GenerativeModel('gemini-2.5-flash')
+                    prompt = f"""
+                    노인분들께 서비스를 드리는 챗봇이니 친절하고 따뜻하게, 존댓말로 답변하되 사용자를 지칭하는 말은 빼주세요.
+                    쉬운 용어를 사용해서 알기 쉽게 설명해 주세요.
+                    인천광역시의 방문요양, 노인맞춤돌봄서비스, 요양보호사 지원제도 등에 대해 정확한 정보를 제공해 주세요.
+                    정보가 없으면 일반적인 돌봄·요양 정보를 알려드려도 됩니다.
+                    질문: {welfare_care}
+                    """
+                    response = model.generate_content(prompt)
+                    st.markdown("**돌봄·요양 정보**")
+                    st.markdown(response.text)
+                except Exception as e:
+                    st.error(f"돌봄 정보 검색 중 오류가 발생했어요: {str(e)}. 다시 시도해 주세요!")
 
-    with tab4:
-        st.subheader("🎨 여가·문화활동")
-        welfare_q4 = st.text_input("여가·취미·문화활동 관련 질문을 입력해 주세요", key="welfare_culture")
-        if welfare_q4:
+    with st.expander("여가·문화활동", expanded=False):
+        st.markdown("여가·문화활동 관련 궁금한 점을 물어보세요!")
+        welfare_culture = st.text_input("여가·취미·문화활동 관련 질문을 입력해 주세요 (예: 인천 노인 문화강좌는?):", key="welfare_culture")
+        if welfare_culture:
             with st.spinner("여가 프로그램 정보를 불러오는 중입니다..."):
-                model = genai.GenerativeModel("gemini-1.5-flash-latest")
-                prompt = f"""
-                당신은 노인 여가복지 도우미 챗봇입니다.
-                복지관 프로그램, 문화강좌, 건강체조, 취미활동 등을 안내해 주세요.
-                질문: {welfare_q4}
-                """
-                answer = model.generate_content(prompt)
-                st.markdown(answer.text)
+                try:
+                    model = genai.GenerativeModel('gemini-2.5-flash')
+                    prompt = f"""
+                    노인분들께 서비스를 드리는 챗봇이니 친절하고 따뜻하게, 존댓말로 답변하되 사용자를 지칭하는 말은 빼주세요.
+                    쉬운 용어를 사용해서 알기 쉽게 설명해 주세요.
+                    인천광역시의 노인 복지관 프로그램, 문화강좌, 건강체조, 취미활동 등에 대해 정확한 정보를 제공해 주세요.
+                    정보가 없으면 일반적인 여가·문화활동 정보를 알려드려도 됩니다.
+                    질문: {welfare_culture}
+                    """
+                    response = model.generate_content(prompt)
+                    st.markdown("**여가·문화활동 정보**")
+                    st.markdown(response.text)
+                except Exception as e:
+                    st.error(f"여가 정보 검색 중 오류가 발생했어요: {str(e)}. 다시 시도해 주세요!")
 
-    with tab5:
-        st.subheader("📞 긴급지원·상담")
-        welfare_q5 = st.text_input("긴급지원이나 상담 관련 질문을 입력해 주세요", key="welfare_emergency")
-        if welfare_q5:
-            with st.spinner("관련 정보를 불러오는 중입니다..."):
-                model = genai.GenerativeModel("gemini-1.5-flash-latest")
-                prompt = f"""
-                당신은 인천시 노인 복지 상담 도우미입니다.
-                긴급생계지원, 상담센터, 노인학대 신고, 위기상담 등 도움받을 수 있는 방법을 안내해 주세요.
-                질문: {welfare_q5}
-                """
-                answer = model.generate_content(prompt)
-                st.markdown(answer.text)
+    with st.expander("긴급지원·상담", expanded=False):
+        st.markdown("긴급지원·상담 관련 궁금한 점을 물어보세요!")
+        welfare_emergency = st.text_input("긴급지원이나 상담 관련 질문을 입력해 주세요 (예: 노인학대 신고 방법은?):", key="welfare_emergency")
+        if welfare_emergency:
+            with st.spinner("긴급지원 정보를 불러오는 중입니다..."):
+                try:
+                    model = genai.GenerativeModel('gemini-2.5-flash')
+                    prompt = f"""
+                    노인분들께 서비스를 드리는 챗봇이니 친절하고 따뜻하게, 존댓말로 답변하되 사용자를 지칭하는 말은 빼주세요.
+                    쉬운 용어를 사용해서 알기 쉽게 설명해 주세요.
+                    인천광역시의 긴급생계지원, 상담센터, 노인학대 신고, 위기상담 등에 대해 정확한 정보를 제공해 주세요.
+                    정보가 없으면 일반적인 긴급지원·상담 정보를 알려드려도 됩니다.
+                    질문: {welfare_emergency}
+                    """
+                    response = model.generate_content(prompt)
+                    st.markdown("**긴급지원·상담 정보**")
+                    st.markdown(response.text)
+                except Exception as e:
+                    st.error(f"긴급지원 정보 검색 중 오류가 발생했어요: {str(e)}. 다시 시도해 주세요!")
 
     # 사용자 입력 처리 (챗봇)
     if user_input:
@@ -258,7 +274,7 @@ def run_chatbot_hhr():
                     prompt = f"""
                     노인분들께 서비스를 드리는 챗봇이니 친절하고 따뜻하게, 존댓말로 답변하되 사용자를 지칭하는 말은 빼주세요.
                     쉬운 용어를 사용해서 알기 쉽게 설명해 주세요.
-                    질문이 건강검진이나 인천광역시 노인 복지와 관련된 내용이면 정확한 정보를 바탕으로 답변해 주세요.
+                    질문이 건강검진이나 인천광역시 노인 복지(노인일자리, 지원금, 돌봄, 여가, 긴급지원 등)와 관련된 내용이면 정확한 정보를 바탕으로 답변해 주세요.
                     질문이 건강검진이나 복지와 무관하면 건강검진 및 복지 관련 질문만 답하도록 안내해 주세요.
                     질문: {user_input}
                     """

@@ -38,10 +38,10 @@ def main():
         # 🔹 페이지 버튼
         if st.button("🏠  홈", key="home", use_container_width=True):
             st.session_state.page = "홈"
-        if st.button("📍  사용자 위치 입력", key="map", use_container_width=True):
-            st.session_state.page = "사용자 위치 입력"
-        if st.button("💬  챗봇", key="chatbot", use_container_width=True):
-            st.session_state.page = "챗봇"
+        if st.button("⛺  시니어 시설 추천 받기", key="map", use_container_width=True):
+            st.session_state.page = "시니어 시설 추천 받기"
+        if st.button("💬  시니어 건강 상담사", key="chatbot", use_container_width=True):
+            st.session_state.page = "시니어 건강 상담사"
 
     # 🔹 페이지 내용
     if "page" not in st.session_state:
