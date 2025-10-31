@@ -19,7 +19,7 @@ def looks_like_food_request(text: str) -> bool:
 
 def _get_client():
     # 1. secrets에서 API 키를 가져옵니다.
-    api_key = st.secrets.get("GEMINI_API_KEY_mj")
+    api_key = st.secrets.get("GEMINI_API_KEY")
     
     if not api_key:
         return None

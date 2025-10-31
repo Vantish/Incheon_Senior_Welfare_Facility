@@ -1,5 +1,6 @@
 import streamlit as st
 from streamlit_option_menu import option_menu 
+from app_chatbot_건강검진 import run_chatbot_2
 from app_home import run_home
 from app_map import run_map
 from app_chatbot_JS import run_chatbot
@@ -43,6 +44,8 @@ def main():
             st.session_state.page = "시니어 시설 추천 받기"
         if st.button("시니어 건강 상담사", key="chatbot", use_container_width=True):
             st.session_state.page = "시니어 건강 상담사"
+        # if st.button("시니어 건강 상담사2", key="AI", use_container_width=True):
+        #     st.session_state.page = "시니어 건강 상담사2"
 
     # 🔹 페이지 내용
     if "page" not in st.session_state:
@@ -54,6 +57,8 @@ def main():
         run_map()
     elif st.session_state.page == "시니어 건강 상담사":
         run_chatbot()
+    # elif st.session_state.page == "시니어 건강 상담사2":
+    #     run_chatbot_2()
 
     # menu_list = ['홈', '시니어 시설 추천 받기', '건강 상담사']
     # menu_select = st.sidebar.selectbox('메뉴', menu_list)
