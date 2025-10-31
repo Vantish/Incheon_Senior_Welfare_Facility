@@ -60,31 +60,25 @@ def load_pdf_texts():
 
 PDF_FULL_TEXT = load_pdf_texts()
 
-# === Gemini 모델 초기화 (한 번만) ===
-@st.cache_resource
-def get_gemini_model():
-    try:
-        genai.configure(api_key=st.secrets["GEMINI_API_KEY_HR"])
-        return genai.GenerativeModel('gemini-1.5-flash')
-    except Exception as e:
-        st.error("Gemini API 연결 실패. 관리자에게 문의하세요.")
-        return None
-
-model = get_gemini_model()
-
 # === PDF에서 질문에 맞는 답변 찾기 (정확도 UP) ===
 def search_pdf_for_answer(question: str) -> str:
     if not PDF_FULL_TEXT.strip():
-        return None
+        return "**PDF를 불러올 수 없습니다.** 관리자에게 문의해 주세요."
     
-    # 질문에서 핵심 키워드 추출
+    # 긴 점선 정규화
+    normalized_text = re.sub(r'·{3,}', '···', PDF_FULL_TEXT)
+    
+    # 키워드 추출
     keywords = re.findall(r'[가-힣]{2,}', question)
     if not keywords:
-        return None
-    
-    # 목차 패턴: "2-1 노인일자리 및 사회활동 지원사업 ································ 43"
-    title_pattern = re.compile(r'^(\d+[-\d]*)[\s·\.]+\s*([가-힣\s\(\)·]+?)[\s·\.]+\s*(\d+)$', re.MULTILINE)
-    matches = title_pattern.finditer(PDF_FULL_TEXT)
+        return "**질문에 키워드가 없습니다.**"
+
+    # 목차 매칭 (정확한 패턴)
+    title_pattern = re.compile(
+        r'^(\d+[-\d]*)\s*[·\.]+\s*([가-힣\s\(\)·]+?)\s*[·\.]+\s*(\d+)$',
+        re.MULTILINE
+    )
+    matches = title_pattern.finditer(normalized_text)
 
     best_match = None
     best_score = 0
@@ -100,12 +94,12 @@ def search_pdf_for_answer(question: str) -> str:
             best_match = (section_num, title, page_num)
 
     if not best_match:
-        return None
+        return "**PDF에 해당 내용이 없습니다.**"
 
     section_num, title, page_num = best_match
 
-    # 내용 추출: 섹션 시작 ~ 다음 섹션 전
-    lines = PDF_FULL_TEXT.split('\n')
+    # 내용 추출
+    lines = normalized_text.split('\n')
     start_idx = None
     end_idx = None
 
@@ -117,7 +111,8 @@ def search_pdf_for_answer(question: str) -> str:
             break
 
     if start_idx is None:
-        return None
+        return "**섹션 내용을 찾을 수 없습니다.**"
+
     if end_idx is None:
         end_idx = len(lines)
 
@@ -131,33 +126,16 @@ def search_pdf_for_answer(question: str) -> str:
 
     return f"**{title}** (페이지 {page_num})\n\n{content}"
 
-# === Gemini로 답변 생성 (PDF 없으면 사용) ===
-def generate_gemini_answer(question: str) -> str:
-    if not model:
-        return "죄송합니다. 현재 답변을 생성할 수 없습니다."
-    
-    prompt = f"""
-    노인분들께 서비스하는 친절한 복지 챗봇입니다. 존댓말로 따뜻하게, 쉽게 설명해 주세요.
-    질문: {question}
-    
-    아래 정보는 참고용입니다. 정확한 정보가 아니면 일반적인 복지 지식으로 답변해 주세요.
-    (PDF 내용은 없음)
-    """
-    try:
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        return f"답변 생성 중 오류가 발생했습니다. 다시 시도해 주세요."
+# 데이터 파일 불러오기
+health_institutions = pd.read_csv('./data/인천광역시_건강검진기관.csv', encoding='cp949', sep='\t')
+health_check_data = pd.read_csv('./data/국민건강보험공단_건강검진정보_2024.csv', encoding="cp949")
 
-# === 건강 계산 함수 (너가 만든 거 그대로) ===
 def calculate_bmi(weight, height):
-    """BMI를 계산해서 소수점 둘째 자리까지 알려드리는 함수입니다."""
     height_m = height / 100
     bmi = weight / (height_m ** 2)
     return round(bmi, 2)
 
 def get_bmi_category(bmi):
-    """BMI를 바탕으로 건강 상태를 알려드립니다."""
     if bmi < 18.5:
         return "저체중"
     elif 18.5 <= bmi < 23:
@@ -170,7 +148,6 @@ def get_bmi_category(bmi):
         return "고도비만"
 
 def get_health_tip(bmi, bp_sys, bp_dia, fbs, waist, gender):
-    """건강 정보를 바탕으로 맞춤형 건강 팁을 드립니다."""
     tips = []
     bmi_category = get_bmi_category(bmi)
     if bmi_category == "저체중":
@@ -178,6 +155,7 @@ def get_health_tip(bmi, bp_sys, bp_dia, fbs, waist, gender):
     elif bmi_category == "과체중":
         tips.append("조금만 더 가벼워지면 몸이 훨씬 편해질 거예요. 밥 먹을 때 채소를 먼저 드시고, 걷기부터 시작해 보세요.")
     elif bmi_category in ["비만", "고도비만"]:
+        tips.append("체중을 조금 관리하시면 더 건강해지실 거예요. 채소 위주의 식사를 하시고, 산책처럼 가벼운 운동을 시작해 보시는 건 어떨까요? 천천히 하셔도 충분해요!")
         tips.append("체중을 조금씩 줄이면 병원 갈 일도 줄어들어요. 밥 먹기 전 물 한 잔, 식사 후 10분 산책, 이 두 가지만 해보세요.")
     else:
         tips.append("지금 체중은 건강한 상태예요! 꾸준히 밥을 잘 챙겨 드시고, 가끔 몸을 움직이시면 좋아요.")
@@ -200,7 +178,6 @@ def get_health_tip(bmi, bp_sys, bp_dia, fbs, waist, gender):
     tips.append(final_tip)
     return "\n\n".join(tips)
 
-# === 메인 앱 실행 (너가 만든 거 그대로) ===
 def run_chatbot_hhr():
     st.title("인천 노인을 위한 도우미 챗봇")
     st.write("건강검진과 복지 정보를 안내드리는 챗봇입니다. 궁금하신 점을 편하게 물어보세요!")
@@ -232,7 +209,7 @@ def run_chatbot_hhr():
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # 사용자 입력 필드
+    # 사용자 입력 필드 (챗봇용)
     user_input = st.chat_input("궁금하신 점을 말씀해 주세요...")
 
     # 검진기관 안내
@@ -246,14 +223,36 @@ def run_chatbot_hhr():
                 st.session_state.search_triggered = True
         st.session_state.user_age = st.number_input("나이를 입력해 주세요", min_value=50, max_value=120, value=st.session_state.user_age, key="age_input_institution")
         st.session_state.user_gender = st.selectbox("성별을 선택해 주세요", ["남성", "여성"], index=0 if st.session_state.user_gender == "남성" else 1, key="gender_input_institution")
-        
+
         if st.session_state.search_triggered and st.session_state.user_address:
-            st.info("실제 검진기관 DB 연결 필요")
-            st.markdown("- **인천시립의료원** | 서구 | 전화: 032-123-4567 | 위암, 대장암")
+            nearby_institutions = health_institutions[health_institutions['주소'].str.contains(st.session_state.user_address, na=False)]
+            if st.session_state.user_gender == "남성":
+                nearby_institutions = nearby_institutions[~nearby_institutions['검진기관명'].str.contains("산부인과", na=False)]
+            if nearby_institutions.empty:
+                st.markdown("입력하신 주소 근처에 적합한 검진 기관이 없어요. 다른 주소를 입력해 보시거나, 더 넓은 지역으로 검색해 드릴까요?")
+            else:
+                st.markdown("**근처 검진 기관 목록입니다**")
+                for index, row in nearby_institutions.iterrows():
+                    services = []
+                    if row['위암'] == 'O':
+                        services.append("위암 검진")
+                    if row['간암'] == 'O':
+                        services.append("간암 검진")
+                    if row['대장암'] == 'O':
+                        services.append("대장암 검진")
+                    if row['구강검진'] == 'O':
+                        services.append("구강검진")
+                    if st.session_state.user_gender == "여성":
+                        if row['유방암'] == 'O':
+                            services.append("유방암 검진")
+                        if row['자궁경부암'] == 'O':
+                            services.append("자궁경부암 검진")
+                    service_str = ', '.join(services) if services else "일반검진"
+                    st.markdown(f"- {row['검진기관명']} | 주소: {row['주소']} | 전화: {row['전화번호']} | 제공 검진: {service_str}")
         elif st.session_state.search_triggered and not st.session_state.user_address:
             st.markdown("주소를 입력해 주시면 근처 검진 기관을 찾아드릴게요!")
 
-    # 건강관리 팁
+    # 건강관리 정보
     with st.expander("건강관리 정보", expanded=False):
         st.markdown("건강 정보를 입력하시면 맞춤형 건강 정보를 드릴게요!")
         weight = st.number_input("체중(kg)을 입력해 주세요", min_value=30.0, max_value=200.0, value=70.0, key="weight_input")
@@ -263,29 +262,24 @@ def run_chatbot_hhr():
         fbs = st.number_input("식전혈당(mg/dL)을 입력해 주세요", min_value=50, max_value=400, value=st.session_state.fbs, key="fbs_input")
         waist = st.number_input("허리둘레(cm)를 입력해 주세요", min_value=50, max_value=150, value=st.session_state.waist, key="waist_input")
         gender = st.selectbox("성별을 선택해 주세요", ["남성", "여성"], index=0 if st.session_state.user_gender == "남성" else 1, key="gender_input_health")
+        if weight and height:
+            bmi = calculate_bmi(weight, height)
+            st.markdown(f"**BMI**: {bmi} ({get_bmi_category(bmi)})")
+            health_tip = get_health_tip(bmi, bp_sys, bp_dia, fbs, waist, gender)
+            st.markdown("**맞춤 건강 팁**")
+            st.markdown("**맞춤 건강 정보**")
+            st.markdown(health_tip)
 
-        if weight and height and height > 0:
-            try:
-                bmi = calculate_bmi(weight, height)
-                st.markdown(f"**BMI**: {bmi} ({get_bmi_category(bmi)})")
-                health_tip = get_health_tip(bmi, bp_sys, bp_dia, fbs, waist, gender)
-                st.markdown("**맞춤 건강 정보**")
-                st.markdown(health_tip)
-            except Exception as e:
-                st.warning("BMI 계산 중 오류가 발생했습니다.")
-        else:
-            st.info("체중과 키를 입력해 주시면 BMI를 계산해 드릴게요!")
-            
     # 검진준비 안내
-    with st.expander("검진준비 안내 질문", expanded=False):
+    with st.expander("검진준비 안내", expanded=False):
         st.markdown("검진 준비에 대해 궁금하신 점을 아래에서 검색해보세요.")
         st.markdown("- 건강검진 전 금식은 어떻게 해야 하나요?")
         st.markdown("- 검진 당일 어떤 옷을 입는 게 좋나요?")
         st.markdown("- 약을 복용 중인데 검진 전 어떻게 해야 하나요?")
         st.markdown("- 검진을 받기 위해 필요한 서류는 무엇인가요?")
-        st.markdown("- 검진 후 결과는 언제 알 수 있나요?")        
+        st.markdown("- 검진 후 결과는 언제 알 수 있나요?")
 
-    # === 복지 4개 섹션 (너가 원한 대로, PDF에서 확실히 나오는 3개 질문만) ===
+    # 복지 프로그램 안내 (PDF 목차 기반 질문만)
     welfare_sections = [
         ("노인일자리 안내 질문", "노인일자리 관련 궁금하신 점을 아래에서 검색해보세요"),
         ("지원금 및 혜택 안내 질문", "지원금 및 혜택 관련 궁금하신 점을 아래에서 검색해보세요!"),
@@ -300,27 +294,38 @@ def run_chatbot_hhr():
             questions = []
             if "노인일자리" in title:
                 questions = [
-                    "- 노인일자리 프로그램은 어떤 종류가 있나요?",  # 2-1, 페이지 43
-                    "- 노인일자리 참여 자격은 어떻게 되나요?",      # 내용 있음
-                    "- 공익활동 프로그램에 어떻게 신청하나요?"      # 내용 있음
+                    "- 노인일자리 및 사회활동 지원사업은 무엇인가요?",        # 2-1, p.43
+                    "- 노인자원봉사 활성화 사업은 어떻게 운영되나요?",        # 2-2, p.62
+                    "- 경로당 운영은 어떤 방식인가요?",                       # 2-3, p.70
+                    "- 노인복지관 설치·운영은 어떻게 되나요?",               # 2-4, p.118
+                    "- 노인교실은 어떤 프로그램이 있나요?"                    # 2-5, p.133
                 ]
             elif "지원금" in title:
                 questions = [
-                    "- 기초연금 신청 방법은 무엇인가요?",           # 1권에 있을 가능성
-                    "- 노인 교통비 지원은 어떻게 받나요?",          # 내용 있음
-                    "- 의료비 지원 대상과 금액은?"                  # 내용 있음
+                    "- 노인지원시설 기능보강 사업은 어떤 혜택인가요?",        # 7-4, p.127
+                    "- 노인복지시설 기능보강 사업은 어떤 내용인가요?",        # 7-5, p.207
+                    "- 노인장기요양보험제도 사업은 무엇인가요?",             # 7-6, p.284
+                    "- 장기요양기관 설치 및 운영기준은 어떻게 되나요?",       # 7-7, p.287
+                    "- 장기요양급여비용의 지급에 관한 기준은?"               # 7-8, p.444
                 ]
             elif "여가" in title:
                 questions = [
-                    "- 노인 문화강좌 프로그램은 어떤 게 있나요?",   # 3권에 있을 가능성
-                    "- 경로당 활동 프로그램은 어떻게 참여하나요?",  # 내용 있음
-                    "- 노인 복지관 여가 활동은 무료인가요?"         # 내용 있음
+                    "- 노인종합복지서비스 사업은 어떤 내용인가요?",            # 3-1, p.139
+                    "- 독거노인·장애인 응급안전안심서비스는 어떻게 신청하나요?", # 3-2, p.148
+                    "- 독거노인 공동생활 홈 서비스는 어떤가요?",             # 3-3, p.152
+                    "- 노인요양시설 설치 및 운영은 어떻게 되나요?",           # 3-4, p.161
+                    "- 학대피해 노인 전용쉼터 운영은 어떻게 되나요?"          # 3-5, p.199
                 ]
             elif "긴급지원" in title:
                 questions = [
-                    "- 노인학대 신고 방법은 무엇인가요?",           # 6권에 있을 가능성
-                    "- 인천 노인 상담센터 연락처는?",               # 내용 있음
-                    "- 학대피해 노인 쉼터 이용 방법은?"             # 내용 있음
+                    "- 치매관리사업의 현황은 어떤가요?",                       # 6-1, p.317
+                    "- 중장·광역 치매안심센터 운영은 어떻게 되나요?",         # 6-2, p.322
+                    "- 치매안심병원 및 공립요양병원 사업은 어떤가요?",         # 6-3, p.329
+                    "- 실종치매환자의 발생예방 및 조기 사법은?",             # 6-4, p.330
+                    "- 치매공공후견사업은 무엇인가요?",                       # 6-5, p.331
+                    "- 노인학대예방사업은 어떻게 운영되나요?",                 # 6-6, p.332
+                    "- 노인 보호전문기관 수술 지원은?",                       # 6-7, p.347
+                    "- 노인 긴급전화 운영은 어떻게 되나요?"                   # 6-8, p.357
                 ]
 
             for q in questions:
@@ -328,32 +333,22 @@ def run_chatbot_hhr():
                     with st.spinner("PDF에서 정보를 찾고 있어요..."):
                         pdf_answer = search_pdf_for_answer(q)
                     
-                    if pdf_answer and len(pdf_answer.strip()) > 50:
-                        st.markdown("**PDF 안내서에서 찾은 내용입니다:**")
-                        st.markdown(pdf_answer)
-                    else:
-                        st.markdown("**PDF에 자세한 내용이 없어, 일반적인 안내를 드릴게요:**")
-                        with st.spinner("답변을 준비하고 있어요..."):
-                            gemini_answer = generate_gemini_answer(q)
-                        st.markdown(gemini_answer)
+                    st.markdown("**PDF 안내서에서 찾은 내용입니다:**")
+                    st.markdown(pdf_answer)
 
-    # 사용자 입력 처리 (챗봇)
+    # 사용자 입력 처리 (챗봇 - PDF 우선, 없으면 안내)
     if user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
             st.markdown(user_input)
-        
+
         with st.chat_message("assistant"):
-            with st.spinner("잠시만 기다려 주세요..."):
+            with st.spinner("PDF에서 정보를 찾고 있어요..."):
                 pdf_answer = search_pdf_for_answer(user_input)
-                if pdf_answer and len(pdf_answer.strip()) > 50:
-                    st.markdown("**공식 안내서 발췌**")
-                    st.markdown(pdf_answer)
-                else:
-                    st.markdown("**일반 안내**")
-                    gemini_answer = generate_gemini_answer(user_input)
-                    st.markdown(gemini_answer)
-                st.session_state.messages.append({"role": "assistant", "content": st.session_state.messages[-1]["content"]})
+            st.markdown(pdf_answer)
+            st.session_state.messages.append({"role": "assistant", "content": pdf_answer})
 
 if __name__ == "__main__":
     run_chatbot_hhr()
+
+    # 다른코드는 절대 건들지말고 너가 건드릴수잇는건 pdf, 노인일자리, 지원금및혜택, 여가문화활동, 긴급지원 코드만 건드릴수있어 다른 코드 건들지마.
