@@ -44,14 +44,12 @@ def run_location():
     if address:
         facility_types = df['시설유형'].dropna().unique()
         selected_type = st.selectbox('시설유형을 선택하세요', facility_types)
-    else:
-        
     
 
     # 주소가 비어 있으면 None 반환 (app_map에서 체크)
         if not address:
             st.info('주소를 입력하면 해당 위치를 찾아 추천을 제공합니다.')
-        return None
+            return None 
 
     # 지오코딩 실패 시 None 반환
     if lat is None or lon is None:
