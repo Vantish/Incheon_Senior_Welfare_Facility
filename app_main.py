@@ -3,6 +3,7 @@ from streamlit_option_menu import option_menu
 from app_home import run_home
 from app_map import run_map
 from app_chatbot_JS import run_chatbot
+# from app_chatbot_hr import run_chatbot_hrr
 from define import set_sidebar_background 
 
 # --- 🚀 메인 함수 ---
