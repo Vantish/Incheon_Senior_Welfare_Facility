@@ -18,10 +18,10 @@ LLM_MODEL = "gemini-2.5-flash"
 # --- [시작] Streamlit 앱 설정 ---
 st.set_page_config(
     page_title="어르신 복지 챗봇",
-    page_icon="👵",
+    page_icon="",
     layout="centered",
 )
-st.title("👵 어르신 건강복지 챗봇")
+st.title("어르신 건강복지 챗봇")
 
 # --- [수정] API 키 로드 및 OS 환경변수 설정 ---
 # secrets.toml에서 API 키를 로드합니다.

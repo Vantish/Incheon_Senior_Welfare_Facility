@@ -59,56 +59,141 @@ def get_health_tip(bmi, bp_sys, bp_dia, fbs, waist, gender):
     tips.append(final_tip)
     return "\n\n".join(tips)
 
-# --- PDF 텍스트 미리 추출 (캐싱) ---
-@st.cache_data
-def load_pdf_texts():
-    text1 = ""
-    text2 = ""
-    try:
-        with open('./data/2025+노인보건복지사업안내(1권).pdf', 'rb') as file:  # PDF 경로 맞춰주세요
-            reader = PyPDF2.PdfReader(file)
-            for page in reader.pages:
-                text1 += page.extract_text() + '\n'
-    except FileNotFoundError:
-        st.warning("PDF 파일(1권)을 찾을 수 없어요. Gemini로 답변드릴게요.")
-    
-    try:
-        with open('./data/2025+노인보건복지사업안내(2권).pdf', 'rb') as file:  # PDF 경로 맞춰주세요
-            reader = PdfReader(file)
-            for page in reader.pages:
-                text2 += page.extract_text() + '\n'
-    except FileNotFoundError:
-        st.warning("PDF 파일(2권)을 찾을 수 없어요. Gemini로 답변드릴게요.")
-    
-    full_text = text1 + '\n\n--- 2권 ---\n\n' + text2
-    return full_text
+# --- RAG(CHROMA) 통합: app_testchatbot의 캐시된 벡터스토어/체인을 사용 ---
+# app_testchatbot.py에 정의된 load_vectorstore, make_rag_chain를 재사용합니다.
+from app_testchatbot import load_vectorstore, make_rag_chain
 
-# --- PDF 도구 헬퍼 함수 ---
-def search_pdf(query, full_text):
+
+# RAG 체인에 질문을 보내고 답변을 받아오는 간단한 헬퍼
+def ask_rag(question):
     try:
-        lines = full_text.split('\n')
-        results = []
-        for i, line in enumerate(lines):
-            if re.search(query, line, re.IGNORECASE):
-                approx_page = (i // 50) + 1  # 대략 페이지 추정
-                results.append({'page': approx_page, 'snippet': line.strip()})
-        return [r['page'] for r in results[:3]], "PDF 텍스트"  # 상위 3개 페이지
-    except:
-        return [], "PDF 텍스트"
-    
-def browse_pdf_pages(pages, full_text):
-    if not pages:
+        # 캐시된 리소스에서 불러오기 (app_testchatbot에서 @st.cache_resource 적용되어 있음)
+        vectordb = load_vectorstore()
+        chain = make_rag_chain(vectordb)
+        result = chain.invoke({"question": question})
+        # chain.invoke는 보통 문자열을 반환
+        return result
+    except Exception as e:
+        # 호출 실패 시 None 반환 (상위 코드에서 Gemini로 폴백 가능)
+        print(f"ask_rag error: {e}")
         return None
+
+
+# 질문을 문서 내용에 맞춰 재매핑한 뒤 다시 RAG로 시도하는 헬퍼
+def ask_with_fallback(topic_query, user_display_question=None):
+    """주제(또는 키워드)로 RAG에 질의하고, 결과가 없으면 보유한 문서 주제에 맞춰
+    질의를 재구성해 다시 시도합니다. 최종 실패 시 Gemini로 폴백합니다.
+
+    - topic_query: RAG에 직접 보낼 기본 쿼리(문서 키워드)
+    - user_display_question: 사용자가 보는 질문 문구(로그/폴백용)
+    반환: 문자열(답변)
+    """
+    # If a list of candidates is provided, try them in order first
+    if isinstance(topic_query, (list, tuple)):
+        for candidate in topic_query:
+            if not candidate:
+                continue
+            res = ask_rag(candidate)
+            if res:
+                # debug log
+                try:
+                    if "debug_logs" not in st.session_state:
+                        st.session_state["debug_logs"] = []
+                    st.session_state["debug_logs"].append({"method": "candidate", "candidate": candidate})
+                except Exception:
+                    pass
+                print(f"ask_with_fallback: candidate succeeded: {candidate}")
+                return res
+        # fall through to using the first candidate as primary for mappings
+        primary = topic_query[0] if topic_query else ""
+    else:
+        # 1) 먼저 직접 시도
+        res = ask_rag(topic_query)
+        if res:
+            return res
+        primary = topic_query
+
+    # 2) 문서에 존재할 가능성이 높은 토픽으로 재매핑 (간단한 키워드 맵)
+    fallback_map = {
+        # 정책/재정 관련 문서 키워드
+        "건강보험료 지원 - 저소득 노인": "국고보조금 정산",
+        "의료비 지원 - 대상 및 금액": "장기요양기관 운영 및 급여비용 부담",
+        "노인일자리 및 사회활동 지원사업 - 지원금": "시설 운영비 지출",
+        "노인일자리 및 사회활동 지원사업": "노인복지시설 기준",
+        "노인일자리 참여 자격": "노인복지시설 기준",
+        "공익형 일자리 신청 방법": "노인일자리 및 사회활동 지원사업",
+        "방문요양서비스 신청 방법": "장기요양기관 운영 및 급여비용 부담",
+        "장기요양보험 등급판정 방법": "장기요양기관 운영 및 급여비용 부담",
+        "노인학대 신고 방법": "노인학대 예방 교육",
+        "학대피해노인 전용쉼터 이용 방법": "학대피해노인 보호",
+        "노인교실 프로그램 안내": "여가문화 활동 및 프로그램 운영",
+        "경로당 운영 참여 방법": "여가문화 활동 및 프로그램 운영",
+    }
+
+    # 추가 매핑: UI에서 사용하는 q 문자열들을 PDF 내 존재하는 섹션/문구로 재매핑
+    # (추출 스크립트 결과 기반 추천 매핑)
+    fallback_map.update({
+        # 노인일자리 관련
+        "노인일자리 및 사회활동 지원사업 주요 유형 및 설명": "노인복지 일반현황",
+        "노인일자리 참여 자격 및 신청 절차 안내": "노인복지 일반현황",
+        "노인일자리 활동의 급여 및 수당 지급 방식 안내": "사업별 지원기준단가",
+
+        # 지원금/혜택 관련
+        "노인복지 수당 및 지원금의 종류와 지급 기준 안내": "지원 대상 및 범위",
+        "저소득층 대상 의료비 및 지원 제도 운영 방식과 신청 기준 안내": "지원 대상 및 범위",
+        "저소득 노인 대상 건강보험료 지원 프로그램의 주요 내용 및 신청 절차": "지원 대상 및 범위",
+
+        # 돌봄·요양 관련
+        "방문요양 서비스의 제공 범위 및 신청 방법(장기요양 관련) 안내": "장기요양기관 운영 및 급여비용 부담",
+        "장기요양보험 등급 판정 절차 및 등급 기준 안내": "장기요양인정신청",
+
+        # 여가·문화활동 관련
+        "2025년 문화강좌 및 여가프로그램의 개요, 신청방법 및 일정 안내": "프로그램 운영",
+        "경로당 프로그램 참여 방법 및 운영시간(운영 안내)": "프로그램 운영",
+
+        # 긴급지원·상담 관련
+        "노인학대 신고 절차 및 긴급보호 서비스 이용 방법 안내": "긴급복지의료지원",
+        "학대피해 노인 보호(쉼터) 이용 자격 및 연락처 안내": "학대피해노인 보호",
+    })
+
+    # Try mapping based on primary candidate or the original string
+    alt = fallback_map.get(primary)
+    if alt:
+        res2 = ask_rag(alt)
+        if res2:
+            try:
+                if "debug_logs" not in st.session_state:
+                    st.session_state["debug_logs"] = []
+                st.session_state["debug_logs"].append({"method": "fallback_map", "candidate": alt})
+            except Exception:
+                pass
+            print(f"ask_with_fallback: fallback_map succeeded: {alt}")
+            # 문서 기반의 관련 주제로 재질의한 결과를 그대로 반환
+            return res2
+
+    # 3) 키워드 맵에 없으면 간단 키워드 추출(예: 중요한 명사로 재시도)
     try:
-        lines = full_text.split('\n')
-        texts = []
-        start_line = (pages[0] - 1) * 50  # 대략 시작 라인
-        for i in range(start_line, min(start_line + 100, len(lines))):  # 100라인 추출
-            if lines[i].strip():
-                texts.append(lines[i][:1200])
-        return "\n\n".join(texts[:5]) if texts else None  # 상위 5개
-    except:
-        return None
+        # 아주 간단한 추출: 한국어 공백 분할 후 명사처럼 보이는 단어 우선 사용
+        parts = topic_query.split()
+        for p in parts:
+            if len(p) >= 2:
+                res3 = ask_rag(p)
+                if res3:
+                    try:
+                        if "debug_logs" not in st.session_state:
+                            st.session_state["debug_logs"] = []
+                        st.session_state["debug_logs"].append({"method": "keyword", "candidate": p})
+                    except Exception:
+                        pass
+                    print(f"ask_with_fallback: keyword succeeded: {p}")
+                    return res3
+    except Exception:
+        pass
+
+    # 4) 최후 폴백: Gemini에게 원래(또는 표시용) 질문으로 물어본다
+    if user_display_question:
+        return gemini_answer(user_display_question)
+    return gemini_answer(topic_query)
     
 # --- Gemini 폴백 함수 ---
 def gemini_answer(question):
@@ -124,6 +209,88 @@ def gemini_answer(question):
     except:
         return "죄송해요, 지금은 답변을 드릴 수 없어요. 조금 뒤에 다시 시도해 주세요."
 
+
+# 버튼 클릭 시 사용자 표시 라벨은 채팅에 남기고, 내부적으로는 mapped_q를 RAG/Gemini에 요청하는 헬퍼
+def post_user_and_respond(user_label, mapped_q, use_gemini=False):
+    # 사용자에게 보이는 질문 라벨을 채팅에 남깁니다.
+    st.session_state.messages.append({"role": "user", "content": user_label})
+    try:
+        with st.spinner("잠시만 기다려 주세요..."):
+            ans = None
+            success_step = None
+            success_candidate = None
+            if not use_gemini:
+                # 1) 우선 사용자가 본래 입력한 질문(라벨)으로 바로 벡터검색 시도
+                try:
+                    ans = ask_rag(user_label)
+                    if ans:
+                        success_step = "user_label"
+                        success_candidate = user_label
+                except Exception:
+                    ans = None
+
+                # Prepare candidates: allow mapped_q to be a string or list
+                if isinstance(mapped_q, (list, tuple)):
+                    candidates = [c for c in mapped_q if c]
+                elif mapped_q:
+                    candidates = [mapped_q]
+                else:
+                    candidates = []
+
+                # 2) 결합 쿼리: 문서 키 + 원문 질문 (검색 성능 향상을 위해) -> try each candidate
+                if not ans and candidates:
+                    for c in candidates:
+                        try:
+                            combined = f"{c} {user_label}"
+                            ans = ask_rag(combined)
+                            if ans:
+                                success_step = "combined"
+                                success_candidate = c
+                                break
+                        except Exception:
+                            ans = None
+
+                # 3) 그 다음 문서-친화적 키로 검색 (각 후보 순차)
+                if not ans and candidates:
+                    for c in candidates:
+                        try:
+                            ans = ask_rag(c)
+                            if ans:
+                                success_step = "candidate"
+                                success_candidate = c
+                                break
+                        except Exception:
+                            ans = None
+
+                # 4) 그래도 없으면 기존의 폴백 로직(ask_with_fallback)을 사용 (ask_with_fallback는 리스트 대응됨)
+                if not ans:
+                    # ask_with_fallback will also log internally; record that we reached fallback
+                    try:
+                        if "debug_logs" not in st.session_state:
+                            st.session_state["debug_logs"] = []
+                        st.session_state["debug_logs"].append({"method": "pre_ask_with_fallback", "candidates": candidates or [user_label]})
+                    except Exception:
+                        pass
+                    ans = ask_with_fallback(candidates or user_label, user_label)
+                    success_step = success_step or "ask_with_fallback"
+                    success_candidate = success_candidate or (candidates[0] if candidates else user_label)
+            else:
+                # Gemini 직접 호출: 사용자 질문을 그대로 보냄
+                ans = gemini_answer(user_label)
+                success_step = "gemini"
+                success_candidate = user_label
+        # record debug trace for this request
+        try:
+            if "debug_logs" not in st.session_state:
+                st.session_state["debug_logs"] = []
+            st.session_state["debug_logs"].append({"user_label": user_label, "success_step": success_step, "success_candidate": success_candidate})
+        except Exception:
+            pass
+        print(f"post_user_and_respond: user_label={user_label} success_step={success_step} success_candidate={success_candidate}")
+        st.session_state.messages.append({"role": "assistant", "content": ans})
+    except Exception as e:
+        st.session_state.messages.append({"role": "assistant", "content": "죄송해요, 답변 생성 중 오류가 발생했습니다."})
+
 # --- 메인 함수 ---
 def run_chatbot_hhr():
     st.title("👵🧓 인천 노인을 위한 도우미 챗봇")
@@ -131,17 +298,21 @@ def run_chatbot_hhr():
 
     # Gemini 초기화
     try:
-        genai.configure(api_key=st.secrets["GEMINI_API_KEY_HR"])
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     except KeyError:
         st.error("Gemini API 키가 설정되지 않았어요. secrets.toml 파일을 확인하거나 관리자에게 문의해 주세요.")
         return
     
-    # PDF 텍스트 로드 (캐싱)
-    full_pdf_text = load_pdf_texts()
+    # (PDF 직접 로드 제거) RAG 체인은 버튼/입력 시 ask_rag()로 호출합니다.
 
     # 세션 상태 초기화
     if "messages" not in st.session_state:
         st.session_state.messages = []
+    # 사용자가 입력창에 채우는 값의 실제 위젯 키는 'composer_input'입니다.
+    # 버튼 핸들러와 폼이 같은 키를 공유하도록 초기화합니다.
+    if "composer_input" not in st.session_state:
+        st.session_state["composer_input"] = ""
+    # 위젯 전용 세션 키는 직접 설정하지 않습니다. 대신 'composer_input'을 소스 오브 트루스으로 사용합니다.
     if "user_address" not in st.session_state:
         st.session_state.user_address = ""
     if "user_age" not in st.session_state:
@@ -161,13 +332,10 @@ def run_chatbot_hhr():
     if "search_triggered" not in st.session_state:
         st.session_state.search_triggered = False
 
-    # 채팅 기록 표시
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    # 사용자 입력
-    user_input = st.chat_input("다른 궁금하신 점을 말씀해 주세요 ! ")
+    # --- 여기까지가 모든 선택지/설정 UI입니다. 채팅(대화창)을 먼저 표시합니다. ---
+    # 채팅을 표시할 자리(플레이스홀더)를 먼저 만듭니다. 이 컨테이너는 예시 질문들 위에
+    # 렌더링되며, 이후 예시 질문들이 나오고 마지막에 입력창이 위치합니다.
+    chat_container = st.container()
 
     # --- 검진기관 안내 ---
     with st.expander("🏥 검진기관 안내", expanded=False):
@@ -224,190 +392,136 @@ def run_chatbot_hhr():
     with st.expander("📌검진준비 안내 질문", expanded=False):
         st.markdown("아래 질문 중 하나를 클릭하시면 자세히 알려드려요!")
         
-        if st.button("건강검진 전 금식은 어떻게 해야 하나요?"):
+        if st.button("건강검진 전 금식은 어떻게 해야 하나요?"): 
+            q = "건강검진 전 금식 방법"
+            st.session_state.messages.append({"role": "user", "content": q})
             with st.spinner("잠시만 기다려 주세요..."):
-                st.markdown(gemini_answer("건강검진 전 금식 방법"))
+                a = gemini_answer(q)
+            st.session_state.messages.append({"role": "assistant", "content": a})
         st.markdown("<br>", unsafe_allow_html=True)
         
         if st.button("검진 당일 어떤 옷을 입는 게 좋나요?"):
+            q = "건강검진 당일 옷차림"
+            st.session_state.messages.append({"role": "user", "content": q})
             with st.spinner("잠시만 기다려 주세요..."):
-                st.markdown(gemini_answer("건강검진 당일 옷차림"))
+                a = gemini_answer(q)
+            st.session_state.messages.append({"role": "assistant", "content": a})
         st.markdown("<br>", unsafe_allow_html=True)
         
         if st.button("약을 복용 중인데 검진 전 어떻게 해야 하나요?"):
+            q = "건강검진 전 약 복용 방법"
+            st.session_state.messages.append({"role": "user", "content": q})
             with st.spinner("잠시만 기다려 주세요..."):
-                st.markdown(gemini_answer("건강검진 전 약 복용 방법"))
+                a = gemini_answer(q)
+            st.session_state.messages.append({"role": "assistant", "content": a})
         st.markdown("<br>", unsafe_allow_html=True)
         
         if st.button("검진을 받기 위해 필요한 서류는 무엇인가요?"):
+            q = "건강검진 필요 서류"
+            st.session_state.messages.append({"role": "user", "content": q})
             with st.spinner("잠시만 기다려 주세요..."):
-                st.markdown(gemini_answer("건강검진 필요 서류"))
+                a = gemini_answer(q)
+            st.session_state.messages.append({"role": "assistant", "content": a})
         st.markdown("<br>", unsafe_allow_html=True)
         
         if st.button("검진 후 결과는 언제 알 수 있나요?"):
+            q = "건강검진 결과 확인 시기"
+            st.session_state.messages.append({"role": "user", "content": q})
             with st.spinner("잠시만 기다려 주세요..."):
-                st.markdown(gemini_answer("건강검진 결과 확인 시기"))
+                a = gemini_answer(q)
+            st.session_state.messages.append({"role": "assistant", "content": a})
 
         # --- 노인일자리 안내 ---
     with st.expander("☀️노인일자리 안내 질문", expanded=False):
         st.markdown("아래를 클릭하시면 자세히 알려드려요!")
-        if st.button("인천 노인일자리 프로그램은 어떤 종류가 있나요?"):
-            with st.spinner("잠시만 기다려 주세요..."):
-                pages, _ = search_pdf("노인일자리 및 사회활동 지원사업", full_pdf_text)
-                content = browse_pdf_pages(pages, full_pdf_text)
-                if content:
-                    st.success("찾아온 정보 (43페이지 기준)")
-                    st.markdown(content)
-                else:                    
-                    st.markdown(gemini_answer("인천 노인일자리 프로그램 종류"))
+        label = "노인일자리 및 사회활동 지원사업: 주요 유형과 개요"
+        if st.button(label):
+            post_user_and_respond(label, ["노인복지 일반현황", "노인일자리 및 사회활동 지원사업"])
         st.markdown("<br>", unsafe_allow_html=True)
-        
-        if st.button("노인일자리 참여 자격은 어떻게 되나요?"):
-            with st.spinner("잠시만 기다려 주세요..."):
-                pages, _ = search_pdf("참여자격", full_pdf_text)
-                content = browse_pdf_pages(pages, full_pdf_text)
-                if content:
-                    st.success("참여 자격 안내")
-                    st.markdown(content)
-                else:                   
-                    st.markdown(gemini_answer("노인일자리 참여 자격"))
+        label = "노인일자리 참여 자격 및 신청 절차 안내"
+        if st.button(label):
+            post_user_and_respond(label, ["노인복지 일반현황", "노인일자리 참여 자격"])
         st.markdown("<br>", unsafe_allow_html=True)
-        
-        if st.button("공익활동 프로그램에 어떻게 신청하나요?"):
-            with st.spinner("잠시만 기다려 주세요..."):
-                pages, _ = search_pdf("공익형", full_pdf_text)
-                content = browse_pdf_pages(pages, full_pdf_text)
-                if content:
-                    st.success("공익형 일자리 신청 방법")
-                    st.markdown(content)
-                else:                  
-                    st.markdown(gemini_answer("노인일자리 공익활동 신청 방법"))
+        label = "노인일자리 활동 급여·수당 지급 방식 안내"
+        if st.button(label):
+            post_user_and_respond(label, ["사업별 지원기준단가", "급여 지급 방식"])
 
     # --- 지원금 및 혜택 ---
     with st.expander("🌻지원금 및 혜택 안내 질문", expanded=False):
-        if st.button("노인 일자리 참여 시 어떤 지원금이 있나요?"):
-            with st.spinner("잠시만 기다려 주세요..."):
-                pages, _ = search_pdf("노인일자리 및 사회활동 지원사업", full_pdf_text)
-                content = browse_pdf_pages(pages, full_pdf_text)
-                if content:
-                    st.success("노인일자리 지원금 안내")
-                    st.markdown(content)
-                else:                   
-                    st.markdown(gemini_answer("노인 일자리 참여 지원금"))
+        label = "노인복지 수당·지원금 종류 및 지급기준 안내"
+        if st.button(label):
+            post_user_and_respond(label, ["지원 대상 및 범위", "지원 대상 및 범위 안내", "저소득 지원"])
 
-        if st.button("의료비 지원 대상과 금액은 어떻게 되나요?"):
-            with st.spinner("잠시만 기다려 주세요..."):
-                pages, _ = search_pdf("의료비 지원", full_pdf_text)
-                content = browse_pdf_pages(pages, full_pdf_text)
-                if content:
-                    st.success("의료비 지원 안내")
-                    st.markdown(content)
-                else:                  
-                    st.markdown(gemini_answer("노인 의료비 지원 대상 금액"))
+        label = "저소득·의료비 지원 제도 운영 방식 및 신청 기준"
+        if st.button(label):
+            post_user_and_respond(label, ["지원 대상 및 범위", "의료비 지원", "저소득 지원"])
         st.markdown("<br>", unsafe_allow_html=True)
         
-        if st.button("저소득 노인 건강보험료 지원 프로그램은?"):
-            with st.spinner("잠시만 기다려 주세요..."):
-                pages, _ = search_pdf("건강보험료 지원", full_pdf_text)
-                content = browse_pdf_pages(pages, full_pdf_text)
-                if content:
-                    st.success("건강보험료 지원")
-                    st.markdown(content)
-                else:                 
-                    st.markdown(gemini_answer("저소득 노인 건강보험료 지원"))
+        label = "저소득 노인 건강보험료 지원 프로그램 안내"
+        if st.button(label):
+            post_user_and_respond(label, ["지원 대상 및 범위", "건강보험료 지원"])
 
     # --- 돌봄·요양 ---
     with st.expander("🕊️돌봄·요양 안내 질문", expanded=False):
-        if st.button("방문요양 서비스 신청 방법은 어떻게 되나요?"):
-            with st.spinner("잠시만 기다려 주세요..."):
-                pages, _ = search_pdf("방문요양서비스", full_pdf_text)
-                content = browse_pdf_pages(pages, full_pdf_text)
-                if content:
-                    st.success("방문요양 서비스 (2권 7-3)")
-                    st.markdown(content)
-                else:                   
-                    st.markdown(gemini_answer("방문요양 서비스 신청 방법"))
+        label = "방문요양 서비스 제공 범위 및 신청 방법 안내"
+        if st.button(label):
+            post_user_and_respond(label, ["장기요양기관 운영 및 급여비용 부담", "방문요양 서비스 제공 범위"])
         st.markdown("<br>", unsafe_allow_html=True)
-        
-        if st.button("장기요양보험 등급 판정은 어떻게 하나요?"):
-            with st.spinner("잠시만 기다려 주세요..."):
-                pages, _ = search_pdf("등급판정", full_pdf_text)
-                content = browse_pdf_pages(pages, full_pdf_text)
-                if content:
-                    st.success("장기요양 등급 판정")
-                    st.markdown(content)
-                else:                
-                    st.markdown(gemini_answer("장기요양보험 등급 판정 방법"))
+        label = "장기요양보험 등급 판정 절차 및 등급 기준"
+        if st.button(label):
+            post_user_and_respond(label, ["장기요양인정신청", "장기요양보험 등급판정"])
 
     # --- 여가·문화활동 ---
     with st.expander("🧩여가·문화활동 안내 질문", expanded=False):
-        if st.button("인천 노인 문화강좌 프로그램은 어떤 게 있나요?"):
-            with st.spinner("잠시만 기다려 주세요..."):
-                pages, _ = search_pdf("노인교실", full_pdf_text)
-                content = browse_pdf_pages(pages, full_pdf_text)
-                if content:
-                    st.success("노인교실 프로그램")
-                    st.markdown(content)
-                else:              
-                    st.markdown(gemini_answer("인천 노인 문화강좌 프로그램"))
+        label = "2025년 문화강좌·여가프로그램 개요 및 신청방법"
+        if st.button(label):
+            post_user_and_respond(label, ["프로그램 운영", "여가문화 활동 및 프로그램 운영"])
         st.markdown("<br>", unsafe_allow_html=True)
         
-        if st.button("경로당 활동 프로그램은 어떻게 참여하나요?"):
-            with st.spinner("잠시만 기다려 주세요..."):
-                pages, _ = search_pdf("경로당 운영", full_pdf_text)
-                content = browse_pdf_pages(pages, full_pdf_text)
-                if content:
-                    st.success("경로당 프로그램")
-                    st.markdown(content)
-                else:                  
-                    st.markdown(gemini_answer("경로당 프로그램 참여 방법"))
+        label = "경로당 프로그램 참여 방법 및 운영시간 안내"
+        if st.button(label):
+            post_user_and_respond(label, ["프로그램 운영", "경로당 프로그램 운영"])
 
     # --- 긴급지원·상담 ---
     with st.expander("🆘 긴급지원·상담 안내 질문", expanded=False):
-        if st.button("노인학대 신고 방법은 무엇인가요?"):
-            with st.spinner("잠시만 기다려 주세요..."):
-               pages, _ = search_pdf("노인학대 신고", full_pdf_text)
-               content = browse_pdf_pages(pages, full_pdf_text)
-               if content:
-                    st.success("노인학대 신고 안내")
-                    st.markdown(content)
-               else:               
-                    st.markdown(gemini_answer("노인학대 신고 방법"))
+        label = "노인학대 신고 절차 및 긴급보호(응급지원) 서비스 안내"
+        if st.button(label):
+            post_user_and_respond(label, ["긴급복지의료지원", "긴급지원", "응급지원"])
         st.markdown("<br>", unsafe_allow_html=True)
-        
-        if st.button("학대피해 노인 쉼터 이용 방법은?"):
-            with st.spinner("잠시만 기다려 주세요..."):
-                pages, _ = search_pdf("학대피해노인 전용쉼터", full_pdf_text)
-                content = browse_pdf_pages(pages, full_pdf_text)
-                if content:
-                    st.success("학대피해 노인 쉼터")
-                    st.markdown(content)
-                else:
-                    st.markdown(gemini_answer("학대피해 노인 쉼터 이용 방법"))
+        label = "학대피해 노인 쉼터 이용 자격 및 연락처 안내"
+        if st.button(label):
+            post_user_and_respond(label, ["학대피해노인 보호", "학대피해노인 쉼터", "학대피해 보호"])
+
+    # (chat_container was moved earlier to appear before the example questions)
+
+    # --- 사용자 입력 폼 (페이지 하단에 렌더링되도록 컨테이너 생성 후 배치) ---
+    with st.form("chat_form", clear_on_submit=False):
+        composer_val = st.text_input("다른 궁금하신 점을 말씀해 주세요 ! ", value=st.session_state.get("composer_input", ""), key="composer_widget")
+        submitted = st.form_submit_button("전송")
+    user_input = None
+    if submitted:
+        composer_val = st.session_state.get("composer_widget", "")
+        if composer_val:
+            user_input = composer_val
+            # 전송 후 입력창 상태 초기화 (widget-backed 키는 직접 수정하지 않습니다)
+            st.session_state["composer_input"] = ""
 
     # --- 챗봇 입력 처리 ---
     if user_input:
+        # 사용자가 직접 입력한 경우: 메시지 기록만 추가하고, 답변은 세션 스토어에 저장합니다.
         st.session_state.messages.append({"role": "user", "content": user_input})
-        with st.chat_message("user"):
-            st.markdown(user_input)
-        
-        with st.chat_message("assistant"):
+        try:
             with st.spinner("잠시만 기다려 주세요..."):
-                try:
-                    model = genai.GenerativeModel('gemini-2.5-flash')
-                    prompt = f"""
-                    노인분들께 서비스를 드리는 챗봇이니 친절하고 따뜻하게, 존댓말로 답변하되 사용자를 지칭하는 말은 빼주세요.
-                    쉬운 용어를 사용해서 알기 쉽게 설명해 주세요.
-                    질문이 건강검진이나 인천광역시 노인 복지(노인일자리, 지원금, 돌봄, 여가, 긴급지원 등)와 관련된 내용이면 정확한 정보를 바탕으로 답변해 주세요.
-                    질문이 건강검진이나 복지와 무관하면 건강검진 및 복지 관련 질문만 답하도록 안내해 주세요.
-                    질문: {user_input}
-                    """
-                    response = model.generate_content(prompt)
-                    assistant_message = response.text
-                    st.markdown(assistant_message)
-                    st.session_state.messages.append({"role": "assistant", "content": assistant_message})
-                except Exception as e:
-                    st.error(f"챗봇 응답 생성 중 오류가 발생했어요: {str(e)}. 다시 시도해 주세요!")
+                answer = ask_with_fallback(user_input, user_input)
+            st.session_state.messages.append({"role": "assistant", "content": answer})
+        except Exception as e:
+            st.error(f"챗봇 응답 생성 중 오류가 발생했어요: {str(e)}. 다시 시도해 주세요!")
+
+    # --- 채팅 기록을 플레이스홀더에 렌더링합니다 (페이지 하단에 위치) ---
+    with chat_container:
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"]) 
 
 if __name__ == "__main__":
     run_chatbot_hhr()
