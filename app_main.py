@@ -3,6 +3,7 @@ from app_home import run_home
 from app_map import run_map
 from app_chatbot_JS import run_chatbot
 #from app_chatbot_hr import run_chatbot_hrr
+from app_news import run_news
 from define import set_sidebar_background 
 
 # --- 🚀 메인 함수 ---
@@ -42,8 +43,8 @@ def main():
             st.session_state.page = "시니어 시설 추천 받기"
         if st.button("시니어 건강 상담사", key="chatbot", use_container_width=True):
             st.session_state.page = "시니어 건강 상담사"
-        # if st.button("시니어 건강 상담사2", key="AI", use_container_width=True):
-        #     st.session_state.page = "시니어 건강 상담사2"
+        if st.button("복지 뉴스", key="news", use_container_width=True):
+            st.session_state.page = "복지 뉴스"
 
     # 🔹 페이지 내용
     if "page" not in st.session_state:
@@ -55,6 +56,8 @@ def main():
         run_map()
     elif st.session_state.page == "시니어 건강 상담사":
         run_chatbot()
+    elif st.session_state.page == "복지 뉴스":
+        run_news()
 
 
     # menu_list = ['홈', '시니어 시설 추천 받기', '건강 상담사']
