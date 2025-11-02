@@ -14,7 +14,6 @@ health_check_data = pd.read_csv('./data/국민건강보험공단_건강검진정
 
 # --- RAG(CHROMA) 통합: app_testchatbot의 캐시된 벡터스토어/체인을 사용 ---
 # app_testchatbot.py에 정의된 load_vectorstore, make_rag_chain를 재사용합니다.
-from app_testchatbot import load_vectorstore, make_rag_chain
 from chatbot_hr_define import (
     render_example_popover,
     calculate_bmi,
