@@ -6,7 +6,7 @@ import pandas as pd
 LLM_MODEL = "gemini-2.5-flash"
 
 def _get_client():
-    api_key = st.secrets.get("GEMINI_API_KEY")
+    api_key = st.secrets.get("GOOGLE_API_KEY")
     if not api_key:
         return None
     genai.configure(api_key=api_key)
@@ -36,7 +36,7 @@ def run_chatbot_app():
     current_loc = st.session_state.get("user_location")
 
     st.subheader("사용자 근처의 식당을 추천해드립니다")
-    st.text("찾아보고 싶은 식당 또는 음식을 말씀해주세요 : 예) 여기 근처 중식당 찾아줘")
+    st.text("찾아보고 싶은 식당 또는 음식을 말씀해주세요 : 예) 내 위치 근처 식당 추천해줘")
 
     if current_loc != prev_loc:
         st.session_state.messages = [
