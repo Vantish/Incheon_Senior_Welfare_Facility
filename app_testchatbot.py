@@ -219,11 +219,9 @@ def run_chatbot():
 
     # --- [수정] 앱 시작 시 리소스 로드 (캐시 사용) ---
     try:
-        # 캐시된 함수를 호출하여 DB와 체인을 로드
         vectordb = load_vectorstore()
         chain = make_rag_chain(vectordb)
     except Exception as e:
-        # 로딩 실패 시 앱 중단
         st.error(f"챗봇 로딩 중 오류 발생: {e}")
         st.stop()
 
@@ -231,32 +229,51 @@ def run_chatbot():
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # --- [수정] 채팅 기록 표시 ---
-    for message in st.session_state.messages:
+    # --- [수정] 최근 2개 메시지와 펼치기 옵션 표시 ---
+    total_msgs = len(st.session_state.messages)
+    show_all = st.session_state.get("show_all_messages", False)
+
+    if total_msgs > 2 and not show_all:
+        # 최근 2개 메시지만 출력
+        display_msgs = st.session_state.messages[-2:]
+        with st.expander(f"이전 {total_msgs - 2}개 메시지 보기"):
+            for message in st.session_state.messages[:-2]:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+        
+    else:
+        display_msgs = st.session_state.messages
+
+    # 보여줄 메시지 출력 (최근 2개 + 펼친 이전 메시지 또는 전체)
+    for message in display_msgs:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
     # --- [수정] 사용자 입력 및 챗봇 응답 처리 ---
     user_question = st.chat_input("궁금하신 점을 말씀해 주세요 ! ")
-    
+
+    # 입력이 있을 경우 처리
     if user_question:
-        # 1. 사용자 메시지 저장 및 표시
+        # 사용자 메시지 저장 및 표시
         st.session_state.messages.append({"role": "user", "content": user_question})
         with st.chat_message("user"):
             st.markdown(user_question)
 
-        # 2. 어시스턴트 응답 생성
+        # 어시스턴트 응답 생성
         with st.chat_message("assistant"):
             with st.spinner("답변을 생각 중입니다..."):
                 try:
-                    # RAG 체인 호출
                     answer = chain.invoke({"question": user_question})
                 except Exception as e:
                     answer = f"답변을 생성하는 중 오류가 발생했습니다: {e}"
 
-                # 3. 어시스턴트 메시지 저장 및 표시
+                # 어시스턴트 메시지 저장 및 표시
                 st.session_state.messages.append({"role": "assistant", "content": answer})
                 st.markdown(answer)
+
+        # 메시지가 많아지면 자동으로 펼치기 상태 해제 (예: 새 입력 이후 다시 2개만 표시)
+        st.session_state.show_all_messages = False
+
 
 if __name__ == '__main__':
     run_chatbot()
