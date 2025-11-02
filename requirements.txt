@@ -1,15 +1,30 @@
+# Streamlit & UI
 streamlit
 streamlit-aggrid
-streamlit_option_menu
+streamlit-option-menu
+
+# 데이터 처리 & 지도
 pandas
 numpy
 folium
-# optional for road-based routing (can be omitted to use straight-line fallback)
+geopy
+matplotlib
+scikit-learn
+requests
+
+# 지리/라우팅 (무거움)
 osmnx
 networkx
 
+# Google / 생성형 AI
 google-generativeai
 google-genai
 genai
 
+# PDF 및 RAG
 PyPDF2
+pypdf
+chromadb
+langchain-core
+langchain-community
+langchain-google-genai

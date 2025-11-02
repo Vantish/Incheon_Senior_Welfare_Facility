@@ -183,8 +183,8 @@ def run_home():
             </div>
             <div class="feature-box">
                 <div class="feature-icon"><img src="https://cdn-icons-png.flaticon.com/128/1523/1523481.png" width="64px"></div>
-                <div class="feature-title">버스 정류장 및 노선 정보</div>
-                <div class="feature-desc">주변 정류장 위치,<br>버스 노선 조회</div>
+                <div class="feature-title">버스 정류장 정보</div>
+                <div class="feature-desc">주변 정류장 위치<br>확인 가능</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -336,7 +336,7 @@ def run_home():
                 <img class="step-icon" src="https://cdn-icons-png.flaticon.com/128/1523/1523481.png">
                 <div class="step-content">
                     <div class="step-title">버스 정보 확인</div>
-                    <div class="step-desc">'정류장'을 선택하면 근처 버스 정류장과 노선을 확인할 수 있습니다.</div>
+                    <div class="step-desc">'정류장'을 선택하면 근처 버스 정류장을 확인할 수 있습니다.</div>
                 </div>
             </div>
         </div>

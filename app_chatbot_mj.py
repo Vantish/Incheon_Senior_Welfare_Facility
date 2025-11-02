@@ -4,6 +4,8 @@ from app_around_leisure_restaurant import around_restaurant
 import pandas as pd
 
 LLM_MODEL = "gemini-2.5-flash"
+# Use a namespaced session key for this chatbot to avoid cross-talk with other chatbots
+MESSAGE_KEY = "messages_mj"
 
 def _get_client():
     api_key = st.secrets.get("GOOGLE_API_KEY")
@@ -39,7 +41,7 @@ def run_chatbot_app():
     st.text("찾아보고 싶은 식당 또는 음식을 말씀해주세요 : 예) 내 위치 근처 식당 추천해줘")
 
     if current_loc != prev_loc:
-        st.session_state.messages = [
+        st.session_state[MESSAGE_KEY] = [
             {"role": "assistant", "content": "안녕하세요! 무엇을 도와드릴까요?"}
         ]
         st.session_state["prev_user_location"] = current_loc
@@ -50,7 +52,8 @@ def run_chatbot_app():
         st.info("설정 예: .streamlit/secrets.toml 에 `GEMINI_API_KEY = \"your_api_key\"` 추가")
         return
 
-    for msg in st.session_state.messages:
+    # render messages for this bot only
+    for msg in st.session_state.get(MESSAGE_KEY, []):
         if msg["role"] == "user":
             st.chat_message("user").write(msg["content"])
         else:
@@ -60,7 +63,10 @@ def run_chatbot_app():
         user_input = st.chat_input("=>여기에 입력해주세요 ")
 
     if user_input:
-        st.session_state.messages.append({"role": "user", "content": user_input})
+        # append to this bot's message list
+        if MESSAGE_KEY not in st.session_state:
+            st.session_state[MESSAGE_KEY] = []
+        st.session_state[MESSAGE_KEY].append({"role": "user", "content": user_input})
 
         if looks_like_food_request(user_input):
             user_loc = st.session_state.get('user_location')
@@ -71,7 +77,7 @@ def run_chatbot_app():
                 df_rec = around_restaurant(latlon)
                 if df_rec is None or df_rec.empty:
                     assistant_text = '해당 위치 주변에서 추천할 만한 식당을 찾지 못했습니다.'
-                    st.session_state.messages.append({"role": "assistant", "content": assistant_text})
+                    st.session_state[MESSAGE_KEY].append({"role": "assistant", "content": assistant_text})
                 else:
                     lines = []
                     for i, row in df_rec.head(20).iterrows():
@@ -105,7 +111,7 @@ def run_chatbot_app():
                         except Exception as e:
                             reply_text = f'응답 생성 중 오류가 발생했습니다: {e}'
 
-                    st.session_state.messages.append({"role": "assistant", "content": reply_text})
+                    st.session_state[MESSAGE_KEY].append({"role": "assistant", "content": reply_text})
 
         else:
             system_instruction = (
@@ -119,7 +125,7 @@ def run_chatbot_app():
                 "추천 목록에 없는 식당이나 음식은 찾아서 최근 정보를 알려주세요"
                 "거짓말하지 않고, 없는 답변을 만들어내지 마세요"
             )
-            conversation_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages])
+            conversation_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.get(MESSAGE_KEY, [])])
             prompt = system_instruction + "\n\n" + conversation_text
 
             with st.spinner("검색 응답 생성 중..."):
@@ -128,7 +134,10 @@ def run_chatbot_app():
                 except Exception as e:
                     reply_text = f"오류가 발생했습니다: {e}"
 
-            st.session_state.messages.append({"role": "assistant", "content": reply_text})
+            # append assistant reply to this bot's messages
+            if MESSAGE_KEY not in st.session_state:
+                st.session_state[MESSAGE_KEY] = []
+            st.session_state[MESSAGE_KEY].append({"role": "assistant", "content": reply_text})
 
         st.rerun()
 
