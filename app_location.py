@@ -23,7 +23,8 @@ def run_location():
     # kakao api도 상세 주소, 건물명 만으로는 검색 x 
     def get_lat_lon_kakao(address):
         url = "https://dapi.kakao.com/v2/local/search/address.json"
-        headers = {"Authorization": "KakaoAK 61643eab4a108d8576a883813e67dafc"}  # 중괄호 제거
+        kakao_api_key = st.secrets.get("KAKAO_API_KEY")  # secrets.toml에 저장된 키 읽기
+        headers = {"Authorization": f"KakaoAK {kakao_api_key}"}
         params = {"query": address}
         response = requests.get(url, headers=headers, params=params)
 

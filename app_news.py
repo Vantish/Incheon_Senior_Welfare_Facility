@@ -68,20 +68,28 @@ def run_news():
     if "page_no" not in st.session_state:
         st.session_state.page_no = 1
 
+    if "news_cache" not in st.session_state:
+        # 초기 데이터를 가져올 때 기본 검색 조건을 빈값으로 하여 호출
+        st.session_state.news_cache = fetch_news('', [], '', 10, 1)
+
     left_col, right_col = st.columns([1, 3])
 
     with left_col:
-        st.header("정보 입력")
+        st.header("검색 하기")
         ctpv_nm = st.text_input('지역을 입력해 주세요: 예) 인천', '')
-        options = ['노년', '중장년', '건강', '복지', '저소득', '보훈대상자', '긴급지원', '선택안함']
-        search_wrd_list = st.multiselect('지원대상의 정보를 선택하세요', options)
-        free_text_search = st.text_input('찾고 싶은 내용을 입력하세요', '')
+        
+        # 기존 멀티셀렉트 대신 단일 텍스트 입력으로 변경
+        search_wrd_single = st.text_input('지원 대상을 입력하세요 예) 노인,임산부 등', '')
+        free_text_search = st.text_input('검색하고 싶은 정보를 입력하세요', '')
         num_of_rows = st.number_input('한 페이지 출력 건수', min_value=1, max_value=50, value=10)
 
         page_no = st.session_state.page_no
 
         if st.button('복지 서비스 조회'):
             st.session_state.page_no = 1
+            
+            # 단일 입력 문자열을 쉼표로 분리해 리스트로 변환 (입력에 쉼표가 있으면 복수도 지원)
+            search_wrd_list = [w.strip() for w in search_wrd_single.split(',')] if search_wrd_single else []
             st.session_state.news_cache = fetch_news(ctpv_nm, search_wrd_list, free_text_search, num_of_rows, 1)
 
     with right_col:
@@ -108,22 +116,22 @@ def run_news():
         else:
             st.info('조건에 맞는 복지 서비스가 없습니다.')
 
-    # 페이지 맨 아래에 이전, 다음 페이지 버튼 배치
-    if news:
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button('이전 페이지'):
-                if st.session_state.page_no > 1:
-                    st.session_state.page_no -= 1
+        # 페이지 맨 아래에 이전, 다음 페이지 버튼 배치
+        if news:
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button('이전 페이지'):
+                    if st.session_state.page_no > 1:
+                        st.session_state.page_no -= 1
+                        page_no = st.session_state.page_no
+                        st.session_state.news_cache = fetch_news(ctpv_nm, search_wrd_list, free_text_search, num_of_rows, page_no)
+                    else:
+                        st.warning("첫 페이지입니다.")
+            with col2:
+                if st.button('다음 페이지'):
+                    st.session_state.page_no += 1
                     page_no = st.session_state.page_no
                     st.session_state.news_cache = fetch_news(ctpv_nm, search_wrd_list, free_text_search, num_of_rows, page_no)
-                else:
-                    st.warning("첫 페이지입니다.")
-        with col2:
-            if st.button('다음 페이지'):
-                st.session_state.page_no += 1
-                page_no = st.session_state.page_no
-                st.session_state.news_cache = fetch_news(ctpv_nm, search_wrd_list, free_text_search, num_of_rows, page_no)
 
 if __name__ == '__main__':
     run_news()
