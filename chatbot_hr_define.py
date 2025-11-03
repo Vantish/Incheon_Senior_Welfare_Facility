@@ -499,7 +499,7 @@ def render_example_popover(post_user_and_respond, health_institutions, calculate
         st.markdown("궁금한 질문을 눌러보세요. 팝업 바깥쪽을 누르면 닫힙니다.")
 
         # --- 검진기관 안내 ---
-        with st.expander("🏥 검진기관 안내", expanded=False):
+        with st.expander("🏥 국가 건강 검진 기관 안내", expanded=False):
             st.markdown("궁금하신 검진기관 정보를 확인하려면 주소를 입력하고 검색 버튼을 눌러 주세요.")
             col1, col2 = st.columns([4, 1])
             with col1:
@@ -508,7 +508,7 @@ def render_example_popover(post_user_and_respond, health_institutions, calculate
                 if st.button("🔍내 근처 검진기관 찾기"):
                     st.session_state.search_triggered = True
                     st.rerun()  # 즉시 새로고침
-            st.session_state.user_age = st.number_input("나이를 입력해 주세요", min_value=50, max_value=120, value=st.session_state.get('user_age', 50), key="age_input_popover")
+            st.session_state.user_age = st.number_input("나이를 입력해 주세요", min_value=20, max_value=120, value=st.session_state.get('user_age', 50), key="age_input_popover")
             st.session_state.user_gender = st.selectbox("성별을 선택해 주세요", ["남성", "여성"], index=0 if st.session_state.get('user_gender', '남성') == "남성" else 1, key="gender_input_popover")
 
             if st.session_state.get('search_triggered') and st.session_state.get('user_address'):
