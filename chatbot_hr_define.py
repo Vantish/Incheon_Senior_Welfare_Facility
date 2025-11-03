@@ -516,10 +516,20 @@ def render_example_popover(post_user_and_respond, health_institutions, calculate
                 nearby_institutions = health_institutions[health_institutions['주소'].str.contains(st.session_state.user_address, na=False)]
                 if st.session_state.user_gender == "남성":
                     nearby_institutions = nearby_institutions[~nearby_institutions['검진기관명'].str.contains("산부인과", na=False)]
+                
+                # 사용자 질문을 채팅에 추가
+                user_question = f"{st.session_state.user_address} 근처 검진기관 찾기 (나이: {st.session_state.user_age}세, 성별: {st.session_state.user_gender})"
+                if "messages" not in st.session_state:
+                    st.session_state.messages = []
+                st.session_state.messages.append({"role": "user", "content": user_question})
+                
                 if nearby_institutions.empty:
-                    st.markdown("입력하신 주소 근처에 적합한 검진 기관이 없어요.")
+                    # 검색 결과가 없을 때 채팅창에 출력
+                    result_message = f"죄송합니다. '{st.session_state.user_address}' 근처에서 적합한 검진 기관을 찾을 수 없습니다."
+                    st.session_state.messages.append({"role": "assistant", "content": result_message})
                 else:
-                    st.markdown("**🏥근처 검진 기관 목록입니다**")
+                    # 검색 결과를 채팅창에 출력
+                    result_lines = [f"**🏥 '{st.session_state.user_address}' 근처 검진 기관 목록**\n"]
                     for index, row in nearby_institutions.iterrows():
                         services = []
                         if row['위암'] == 'O': services.append("위암 검진")
@@ -530,9 +540,23 @@ def render_example_popover(post_user_and_respond, health_institutions, calculate
                             if row['유방암'] == 'O': services.append("유방암 검진")
                             if row['자궁경부암'] == 'O': services.append("자궁경부암 검진")
                         service_str = ', '.join(services) if services else "일반검진"
-                        st.markdown(f"- {row['검진기관명']} | 주소: {row['주소']} | 전화: {row['전화번호']} | 제공 검진: {service_str}")
+                        result_lines.append(f"**{row['검진기관명']}**\n- 주소: {row['주소']}\n- 전화: {row['전화번호']}\n- 제공 검진: {service_str}\n")
+                    
+                    result_message = "\n".join(result_lines)
+                    st.session_state.messages.append({"role": "assistant", "content": result_message})
+                
+                # search_triggered 초기화하고 새로고침
+                st.session_state.search_triggered = False
+                st.rerun()
+                
             elif st.session_state.get('search_triggered') and not st.session_state.get('user_address'):
-                st.markdown("🔍주소를 입력해 주시면 근처 검진 기관을 찾아드릴게요!")
+                # 주소가 입력되지 않았을 때 채팅창에 안내 메시지
+                if "messages" not in st.session_state:
+                    st.session_state.messages = []
+                st.session_state.messages.append({"role": "user", "content": "근처 검진기관 찾기"})
+                st.session_state.messages.append({"role": "assistant", "content": "🔍주소를 입력해 주시면 근처 검진 기관을 찾아드릴게요!"})
+                st.session_state.search_triggered = False
+                st.rerun()
 
         # --- 건강관리 정보 ---
         with st.expander("🌈건강관리 정보", expanded=False):
@@ -544,12 +568,25 @@ def render_example_popover(post_user_and_respond, health_institutions, calculate
             fbs = st.number_input("식전혈당(mg/dL)을 입력해 주세요", min_value=50, max_value=400, value=st.session_state.get('fbs', 90), key="fbs_input_popover")
             waist = st.number_input("허리둘레(cm)를 입력해 주세요", min_value=50, max_value=150, value=st.session_state.get('waist', 80), key="waist_input_popover")
             gender = st.selectbox("성별을 선택해 주세요", ["남성", "여성"], index=0 if st.session_state.get('user_gender','남성') == "남성" else 1, key="gender_input_popover_health")
-            if weight and height:
-                bmi = calculate_bmi(weight, height)
-                st.markdown(f"**BMI**: {bmi} ({get_bmi_category(bmi)})")
-                health_tip = get_health_tip(bmi, bp_sys, bp_dia, fbs, waist, gender)
-                st.markdown("**맞춤 건강 정보**")
-                st.markdown(health_tip)
+            
+            # 버튼을 추가하여 채팅창에 결과 출력
+            if st.button("💡 내 건강 정보 분석 결과 보기", key="health_analysis_button"):
+                if weight and height:
+                    bmi = calculate_bmi(weight, height)
+                    health_tip = get_health_tip(bmi, bp_sys, bp_dia, fbs, waist, gender)
+                    
+                    # 사용자 질문을 채팅에 추가
+                    user_question = f"건강 정보 분석 요청 (체중: {weight}kg, 키: {height}cm, 혈압: {bp_sys}/{bp_dia}mmHg, 식전혈당: {fbs}mg/dL, 허리둘레: {waist}cm, 성별: {gender})"
+                    if "messages" not in st.session_state:
+                        st.session_state.messages = []
+                    st.session_state.messages.append({"role": "user", "content": user_question})
+                    
+                    # 분석 결과를 채팅에 추가
+                    analysis_result = f"**BMI 분석 결과**: {bmi} ({get_bmi_category(bmi)})\n\n**맞춤 건강 정보**\n\n{health_tip}"
+                    st.session_state.messages.append({"role": "assistant", "content": analysis_result})
+                    st.rerun()
+                else:
+                    st.warning("체중과 키를 입력해 주세요.")
 
         # --- 검진준비 안내 (Gemini 답변) ---
         with st.expander("📌검진준비 안내 질문", expanded=False):
