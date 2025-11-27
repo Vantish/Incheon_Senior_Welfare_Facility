@@ -3,6 +3,9 @@ import matplotlib.pyplot as plt
 from sklearn.neighbors import NearestNeighbors
 import streamlit as st
 import numpy as np
+import requests
+import xmltodict
+
 
 
 
@@ -25,6 +28,7 @@ def bus_stop_recommendation(user_location, facilities_location, n_neighbors=10):
     정류장명 = next((c for c in cols if any(term in c.lower() for term in ['정류소명', '정류장명', '정류소 명', '정류장 명'])), None)
     행정동명 = next((c for c in cols if any(term in c.lower() for term in ['행정동명', '행정동 명', '동이름'])), None)
     정류소아이디 = next((c for c in cols if any(term in c.lower() for term in ['정류장 id', '정류장ID', '정류소아이디', '정류소 아이디'])), None)
+    정류소번호 = next((c for c in cols if any(term in c.lower() for term in ['정류소번호', '번호', '정류소 번호', 'stop number', 'stop_no'])), None)
 
     if (lat_col is None) or (lon_col is None):
         st.error(f'위도/경도 컬럼을 찾을 수 없습니다. 현재 컬럼: {", ".join(cols)}')
@@ -60,6 +64,7 @@ def bus_stop_recommendation(user_location, facilities_location, n_neighbors=10):
                     '정류장명': bus_stop[정류장명],
                     '행정동명': bus_stop[행정동명],
                     '정류장ID': bus_stop[정류소아이디],
+                    '정류소번호': str(bus_stop[정류소번호]).split('.')[0] if 정류소번호 else '',
                     'dist_user_m': int(dist * 1000)
                 }
                 user_stops.append(stop_info)
@@ -94,6 +99,7 @@ def bus_stop_recommendation(user_location, facilities_location, n_neighbors=10):
                     '정류장명': bus_stop[정류장명],
                     '행정동명': bus_stop[행정동명],
                     '정류장ID': bus_stop[정류소아이디],
+                    '정류소번호':str(bus_stop[정류소번호]).split('.')[0] if 정류소번호 else '',
                     'dist_fac_m': int(dist * 1000)
                 }
                 facility_stops.append(stop_info)
@@ -103,11 +109,68 @@ def bus_stop_recommendation(user_location, facilities_location, n_neighbors=10):
             facility_stops = []
 
     # --- DataFrame 생성과 컬럼 정렬 ---
-    user_columns = ['lat', 'lon', '정류장명', '행정동명','정류장ID', 'dist_user_m']
-    fac_columns = ['lat', 'lon', '정류장명', '행정동명','정류장ID', 'dist_fac_m']
+    user_columns = ['lat', 'lon', '정류장명', '행정동명','정류장ID','정류소번호', 'dist_user_m']
+    fac_columns = ['lat', 'lon', '정류장명', '행정동명','정류장ID','정류소번호', 'dist_fac_m']
 
     user_df = pd.DataFrame(user_stops, columns=user_columns)
     fac_df = pd.DataFrame(facility_stops, columns=fac_columns)
 
     return {'user_nearby': user_df, 'facility_nearby': fac_df}
+
+
+API_KEY = st.secrets.get("INCHEON_BUS_API_KEY")
+
+# 노선ID-노선명 매핑 테이블 로딩 (한 번만 로드)
+route_df = pd.read_csv('data\인천광역시_버스 노선명 및 노선ID.csv', dtype=str,encoding='euc-kr')
+route_dict = dict(zip(route_df['노선아이디'].str.strip(), route_df['노선명'].str.strip()))
+
+def get_bus_arrival_info(stop_info):
+    bstop_id = stop_info.get('정류장ID') if isinstance(stop_info, dict) else stop_info['정류장ID']
+
+    url = "http://apis.data.go.kr/6280000/busArrivalService/getAllRouteBusArrivalList"
+    params = {
+        'serviceKey': API_KEY,
+        'pageNo': '1',
+        'numOfRows': '10',
+        'bstopId': bstop_id
+    }
+    resp = requests.get(url, params=params)
+
+    if resp.status_code != 200:
+        st.error(f"API 요청 실패: 상태 코드 {resp.status_code}")
+        return None
+
+    try:
+        data_dict = xmltodict.parse(resp.content.decode('utf-8'))
+    except Exception as e:
+        st.error(f"XML 파싱 오류: {e}")
+        st.write("원본 응답 내용:", resp.text)
+        return None
+
+    try:
+        msg_body = data_dict.get('ServiceResult', {}).get('msgBody', {})
+        items = msg_body.get('itemList', None)
+
+        if not items:
+            st.info("도착 예정인 버스가 없습니다.")
+            return None
+
+        if isinstance(items, dict):
+            items = [items]
+
+        # 노선ID -> 노선명 변환 적용
+        for item in items:
+            route_id = item.get('ROUTEID', '').strip()
+            item['ROUTEID'] = route_dict.get(route_id, route_id)  # 매핑 없으면 기존 ID 유지
+
+        return items
+
+    except (KeyError, TypeError) as e:
+        st.error(f"도착 정보 형식 오류: {e}")
+        st.write("원본 응답 구조:", data_dict)
+        return None
+    
+    
+
+
 

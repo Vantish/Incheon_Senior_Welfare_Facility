@@ -318,7 +318,7 @@ def run_map():
                         try:
                             folium.Marker(
                                 [float(r['lat']), float(r['lon'])],
-                                popup=make_popup(f"{r.get('정류장명','정류장')}<br>{int(r.get('dist_user_m',0))}m", width=200),
+                                popup=make_popup(f"{r.get('정류장명','정류장')}<br>정류장 번호:  {str(r.get('정류소번호', 'N/A')).split('.')[0]}<br>{int(r.get('dist_user_m',0))}m", width=200),
                                 icon=folium.Icon(color='green', icon='bus', prefix='fa')
                             ).add_to(fmap)
                         except Exception:
@@ -328,7 +328,7 @@ def run_map():
                         try:
                             folium.Marker(
                                 [float(r['lat']), float(r['lon'])],
-                                popup=make_popup(f"{r.get('정류장명','정류장')}<br>{int(r.get('dist_fac_m',0))}m", width=200),
+                                popup=make_popup(f"{r.get('정류장명','정류장')}<br>정류장 번호:  {str(r.get('정류소번호', 'N/A')).split('.')[0]}<br>{int(r.get('dist_fac_m',0))}m", width=200),
                                 icon=folium.Icon(color='darkgreen', icon='bus', prefix='fa')
                             ).add_to(fmap)
                         except Exception:
@@ -349,23 +349,89 @@ def run_map():
 
     if bus_request:
         st.markdown('### 근처 정류장 (사용자 / 시설)')
+
         with st.expander('사용자 근처 정류장'):
-            if user_df is not None and hasattr(user_df, 'head'):
+            if user_df is not None and hasattr(user_df, 'head') and not user_df.empty:
                 try:
-                    st.dataframe(user_df[['정류장명', '행정동명', 'dist_user_m']].rename(columns={'dist_user_m': '거리(m)'}))
-                except Exception:
-                    st.write('사용자 근처 정류장 정보를 표시할 수 없습니다.')
+                    selected_stop = st.selectbox('정류장 선택', user_df['정류장명'].tolist())
+                    st.dataframe(
+                        user_df[['정류장명', '행정동명', '정류소번호', 'dist_user_m']]
+                        .rename(columns={'dist_user_m': '거리(m)'})
+                    )
+
+                    selected_row = user_df[user_df['정류장명'] == selected_stop].iloc[0]
+
+                    from app_bus_stop_recommendation import get_bus_arrival_info
+                    arrival_info = get_bus_arrival_info(selected_row)  # 정류장 행 자체 전달
+
+                    if arrival_info:
+                        st.markdown('#### 선택한 정류장의 버스 도착 정보')
+
+                        rows = []
+                        stop_no = str(selected_row.get('정류소번호', 'N/A')).split('.')[0]
+
+                        for bus in arrival_info:
+                            arrival_sec = bus.get('ARRIVALESTIMATETIME')
+                            arrival_min = int(arrival_sec) // 60 if arrival_sec and arrival_sec.isdigit() else 'N/A'
+                            route_id = bus.get('ROUTEID', 'N/A')
+
+                            row = {
+                                '정류소번호': stop_no,
+                                '노선번호': route_id,
+                                '이전 정류소명': bus.get('LATEST_STOP_NAME', 'N/A'),
+                                '도착예정 시간(분)': arrival_min
+                            }
+                            rows.append(row)
+                        st.table(rows)
+                    else:
+                        st.write('선택한 정류장의 도착 정보를 불러올 수 없습니다.')
+                except Exception as e:
+                    st.write(f'사용자 근처 정류장 정보 표시 중 오류 발생: {e}')
             else:
                 st.write('사용자 근처 정류장 정보가 없습니다.')
 
+
         with st.expander('시설 근처 정류장'):
-            if fac_df is not None and hasattr(fac_df, 'head'):
+            if fac_df is not None and hasattr(fac_df, 'head') and not fac_df.empty:
                 try:
-                    st.dataframe(fac_df[['정류장명', '행정동명', 'dist_fac_m']].rename(columns={'dist_fac_m': '거리(m)'}))
+                    selected_stop_fac = st.selectbox('시설 근처 정류장 선택', fac_df['정류장명'].tolist())
+                    st.dataframe(
+                        fac_df[['정류장명', '행정동명', '정류소번호', 'dist_fac_m']]
+                        .rename(columns={'dist_fac_m': '거리(m)'})
+                    )
+
+                    selected_row_fac = fac_df[fac_df['정류장명'] == selected_stop_fac].iloc[0]
+
+                    from app_bus_stop_recommendation import get_bus_arrival_info
+                    arrival_info_fac = get_bus_arrival_info(selected_row_fac)
+
+                    if arrival_info_fac:
+                        st.markdown('#### 선택한 시설 근처 정류장의 버스 도착 정보')
+
+                        rows = []
+                        stop_no = str(selected_row_fac.get('정류소번호', 'N/A')).split('.')[0]
+
+                        for bus in arrival_info_fac:
+                            arrival_sec = bus.get('ARRIVALESTIMATETIME')
+                            arrival_min = int(arrival_sec) // 60 if arrival_sec and arrival_sec.isdigit() else 'N/A'
+                            route_id = bus.get('ROUTEID', 'N/A')
+
+                            row = {
+                                '정류소번호': stop_no,
+                                '노선번호': route_id,
+                                '이전 정류소명': bus.get('LATEST_STOP_NAME', 'N/A'),
+                                '도착예정 시간(분)': arrival_min
+                            }
+                            rows.append(row)
+                        st.table(rows)
+                    else:
+                        st.write('선택한 시설 근처 정류장의 도착 정보를 불러올 수 없습니다.')
                 except Exception:
                     st.write('시설 근처 정류장 정보를 표시할 수 없습니다.')
             else:
                 st.write('시설 근처 정류장 정보가 없습니다.')
+
+
 
         # if st.button('해당 정류장들로 가는 버스 노선 조회'):
         #     # 간단한 CSV 기반 매칭 결과를 표 형태로 보여줍니다.
