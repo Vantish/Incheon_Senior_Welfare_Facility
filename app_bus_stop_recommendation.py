@@ -15,7 +15,7 @@ import os
 # 사용자 근처 가장 가까운 정류장 5개와 시설에서 가장 가까운 정류장 5개를 딕셔너리 형태로 반환합니다.
 # 반환 정보 = 'user_nearby' and 'facility_nearby'
 
-data_path = os.path.join('data', '버스정류장.csv')
+data_path = os.path.join('data', 'bus stop.csv')
 bus_stops_df = pd.read_csv(data_path)
 
 
@@ -123,7 +123,7 @@ def bus_stop_recommendation(user_location, facilities_location, n_neighbors=10):
 API_KEY = st.secrets.get("INCHEON_BUS_API_KEY")
 
 # 노선ID-노선명 매핑 테이블 로딩 (한 번만 로드)
-route_df = pd.read_csv('data\인천광역시_버스 노선명 및 노선ID.csv', dtype=str,encoding='euc-kr')
+route_df = pd.read_csv('data\incheon bus route.csv', dtype=str,encoding='euc-kr')
 route_dict = dict(zip(route_df['노선아이디'].str.strip(), route_df['노선명'].str.strip()))
 
 def get_bus_arrival_info(stop_info):

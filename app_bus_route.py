@@ -20,7 +20,7 @@ def _ensure_bus_index(path: str = None):  # 기본값 None으로 변경
     global _BUS_ROUTE_CACHE
     
     # os.path.join으로 경로 통일
-    default_path = os.path.join('data', '버스노선.csv')
+    default_path = os.path.join('data', 'bus route.csv')
     path = path or default_path
     
     if _BUS_ROUTE_CACHE['loaded_path'] == path and _BUS_ROUTE_CACHE['stop_to_routes'] is not None:
@@ -42,9 +42,9 @@ def check_bus_route(bus_dic: Dict[str, Any], busroute_csv_path: str = None) -> D
     """
 
     # os.path.join으로 경로 통일
-    default_path = os.path.join('data', '버스노선.csv')
+    default_path = os.path.join('data', 'bus route.csv')
     busroute_csv_path = busroute_csv_path or default_path
-    
+
     stop_to_routes, route_to_stops = _ensure_bus_index(busroute_csv_path)
 
     user_obj = None

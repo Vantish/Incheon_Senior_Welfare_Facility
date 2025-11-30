@@ -8,9 +8,9 @@ from sklearn.tree import DecisionTreeClassifier
 # 1. 데이터 로딩
 @st.cache_data
 def load_data():
-    data_path = os.path.join('data', '인천광역시 시설 현황.csv')
+    data_path = os.path.join('data', 'leisure location.csv')
     facilities = pd.read_csv(data_path, dtype=str, encoding='euc-kr')
-    data_path = os.path.join('data', '인천식당_카테고리_수정.csv')
+    data_path = os.path.join('data', 'restaurant category.csv')
     restaurants = pd.read_csv(data_path, dtype=str, encoding='euc-kr')
 
     facilities = facilities[['시설명', '시설분류', '도로명 주소', 'lat', 'lon']].dropna()

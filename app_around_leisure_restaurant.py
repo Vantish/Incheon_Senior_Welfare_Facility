@@ -18,9 +18,9 @@ from define import _find_lat_lon_cols, _ensure_coord_aliases, _standardize_resta
 # 각각 다른 인코딩(euc-kr, CP949)을 사용해 한글 데이터를 안정적으로 읽습니다.
 
 # 맛집/시설 데이터
-data_path = os.path.join('data', '인천식당_카테고리_수정.csv')
+data_path = os.path.join('data', 'restaurant category.csv')
 맛집_df = pd.read_csv(data_path, dtype=str, encoding='euc-kr')
-data_path = os.path.join('data', '인천광역시 시설 현황.csv')
+data_path = os.path.join('data', 'leisure location.csv')
 시설_df = pd.read_csv(data_path, dtype=str, encoding='CP949')
 
 # 좌표 컬럼 자동 탐색

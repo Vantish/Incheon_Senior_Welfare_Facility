@@ -79,7 +79,7 @@ def run_map():
         return
 
     # 2) 시설 데이터 로드 및 필터링
-    data_path = os.path.join('data', '인천광역시_노인복지시설_현황.csv')
+    data_path = os.path.join('data', 'incheon senior welfare facility.csv')
     노인복지시설_df = pd.read_csv(data_path, dtype=str, encoding='euc-kr')
     cols = [c for c in 노인복지시설_df.columns]
     lat_col = next((c for c in cols if 'lat' in c.lower()), None)

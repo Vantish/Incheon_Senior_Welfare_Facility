@@ -244,7 +244,7 @@ def _find_lat_lon_cols(df):
 ALLOWED_FILES = [
     '2209_노인복지론_1~14주.pdf',
     '안내책자 [중장년·노령층].pdf',
-    '국민건강보험공단_건강검진정보_2024.CSV',
+    'health check data.CSV',
     'incheon_health_check_centers.csv',
 ]
 
@@ -423,7 +423,7 @@ def _standardize_leisure_columns(df):
 # ----------------------------------------------------------------------------------
 
 
-def load_busroute_csv(path: str = './data/버스노선.csv') -> pd.DataFrame:
+def load_busroute_csv(path: str = './data/bus route.csv') -> pd.DataFrame:
     """CSV 파일을 읽어 DataFrame으로 반환합니다. 실패 시 빈 DataFrame 반환."""
     try:
         df = pd.read_csv(path, dtype=str)
