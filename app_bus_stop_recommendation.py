@@ -123,7 +123,8 @@ def bus_stop_recommendation(user_location, facilities_location, n_neighbors=10):
 API_KEY = st.secrets.get("INCHEON_BUS_API_KEY")
 
 # 노선ID-노선명 매핑 테이블 로딩 (한 번만 로드)
-route_df = pd.read_csv('data\incheon bus route.csv', dtype=str,encoding='euc-kr')
+data_path = os.path.join('data', 'incheon bus route.csv')
+route_df = pd.read_csv(data_path, dtype=str, encoding='euc-kr')
 route_dict = dict(zip(route_df['노선아이디'].str.strip(), route_df['노선명'].str.strip()))
 
 def get_bus_arrival_info(stop_info):
