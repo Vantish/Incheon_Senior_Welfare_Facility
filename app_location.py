@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import pandas as pd
 import requests
@@ -11,8 +12,8 @@ import requests
 # 입력한 값을 리턴값으로 넣어서 메인에서 받습니다.
 # 지도 없이 , 사용자 도로명 주소 입력 => 위도, 경도 , 도로명 주소 받아서 리스트로
 # 시설유형 선택 => 리스트로 
-
-df= pd.read_csv('./data/인천광역시_노인복지시설_현황_최종.csv',encoding='euc-kr')
+data_path = os.path.join('data', '인천광역시_노인복지시설_현황_최종.csv')
+df= pd.read_csv(data_path, dtype=str, encoding='euc-kr')
 
 
 def run_location():

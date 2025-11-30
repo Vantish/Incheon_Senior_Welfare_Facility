@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder, StandardScaler
@@ -7,8 +8,10 @@ from sklearn.tree import DecisionTreeClassifier
 # 1. 데이터 로딩
 @st.cache_data
 def load_data():
-    facilities = pd.read_csv('./data/인천광역시 시설 현황.csv', encoding='euc-kr')
-    restaurants = pd.read_csv('./data/인천식당_카테고리_수정.csv', encoding='CP949')
+    data_path = os.path.join('data', '인천광역시 시설 현황.csv')
+    facilities = pd.read_csv(data_path, dtype=str, encoding='euc-kr')
+    data_path = os.path.join('data', '인천식당_카테고리_수정.csv')
+    restaurants = pd.read_csv(data_path, dtype=str, encoding='euc-kr')
 
     facilities = facilities[['시설명', '시설분류', '도로명 주소', 'lat', 'lon']].dropna()
     restaurants = restaurants[['식당명', '행정구역', '도로명 주소', 'lat', 'lon']].dropna()

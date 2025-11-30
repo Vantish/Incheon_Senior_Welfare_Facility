@@ -15,12 +15,17 @@ _BUS_ROUTE_CACHE = {
 # extract_stop_list has been moved to define.py and is imported above.
 
 
-def _ensure_bus_index(path: str = './data/버스노선.csv'):
+def _ensure_bus_index(path: str = None):  # 기본값 None으로 변경
     """CSV를 한 번 로드하고 stop_to_routes, route_to_stops를 캐싱합니다."""
     global _BUS_ROUTE_CACHE
-    path = path or './data/버스노선.csv'
+    
+    # os.path.join으로 경로 통일
+    default_path = os.path.join('data', '버스노선.csv')
+    path = path or default_path
+    
     if _BUS_ROUTE_CACHE['loaded_path'] == path and _BUS_ROUTE_CACHE['stop_to_routes'] is not None:
         return _BUS_ROUTE_CACHE['stop_to_routes'], _BUS_ROUTE_CACHE['route_to_stops']
+    
     df = load_busroute_csv(path)
     stop_to_routes, route_to_stops = build_busroute_index(df)
     _BUS_ROUTE_CACHE['stop_to_routes'] = stop_to_routes
@@ -29,12 +34,17 @@ def _ensure_bus_index(path: str = './data/버스노선.csv'):
     return stop_to_routes, route_to_stops
 
 
-def check_bus_route(bus_dic: Dict[str, Any], busroute_csv_path: str = './data/버스노선.csv') -> Dict[str, Any]:
+def check_bus_route(bus_dic: Dict[str, Any], busroute_csv_path: str = None) -> Dict[str, Any]:
     """주요 함수: 사용자/시설 근처 정류장 목록에서 CSV 기반으로 교차되는 노선(직통)을 찾음.
 
     - bus_dic: {'user_nearby': df_or_list, 'facility_nearby': df_or_list} 형식 권장
     - busroute_csv_path: 버스노선 CSV 경로(상대 경로 허용)
     """
+
+    # os.path.join으로 경로 통일
+    default_path = os.path.join('data', '버스노선.csv')
+    busroute_csv_path = busroute_csv_path or default_path
+    
     stop_to_routes, route_to_stops = _ensure_bus_index(busroute_csv_path)
 
     user_obj = None

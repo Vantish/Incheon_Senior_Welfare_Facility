@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 from app_home import run_home
 from app_map import run_map
@@ -9,7 +10,7 @@ from define import set_sidebar_background
 def main():
     st.set_page_config(layout="wide")
     
-    set_sidebar_background("./data/sb_bg.png")  # 사이드바 배경 이미지
+    set_sidebar_background(os.path.join('data', 'sb_bg.png'))  # 사이드바 배경 이미지
 
     with st.sidebar:
         # 🔹 버튼 배경만 자연스럽게 blending 되도록 CSS 수정

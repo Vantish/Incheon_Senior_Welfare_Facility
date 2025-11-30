@@ -9,8 +9,10 @@ import os
 from pypdf import PdfReader
 
 # 데이터 파일 불러오기
-health_institutions = pd.read_csv('./data/인천광역시_건강검진기관.csv', encoding='cp949', sep='\t')
-health_check_data = pd.read_csv('./data/국민건강보험공단_건강검진정보_2024.csv', encoding="cp949")
+data_path = os.path.join('data', '인천광역시_건강검진기관.csv')
+health_institutions = pd.read_csv(data_path, dtype=str, encoding='cp949', sep='\t')
+data_path = os.path.join('data', '국민건강보험공단_건강검진정보_2024.csv')
+health_check_data = pd.read_csv(data_path, dtype=str, encoding="cp949")
 
 # --- RAG(CHROMA) 통합: app_testchatbot의 캐시된 벡터스토어/체인을 사용 ---
 # app_testchatbot.py에 정의된 load_vectorstore, make_rag_chain를 재사용합니다.
