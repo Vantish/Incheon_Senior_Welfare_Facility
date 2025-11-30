@@ -13,7 +13,7 @@ scikit-learn==1.7.2
 requests==2.32.5
 
 # 지리/라우팅 (무거움)
-osmnx==2.0.6
+osmnx==1.9.6
 networkx==3.4.2
 
 # Google / 생성형 AI

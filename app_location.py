@@ -36,30 +36,27 @@ def run_location():
                     lon = float(top_result["x"])
                 return lat, lon
         return None, None
-          
-
-    lat, lon = get_lat_lon_kakao(address)
-
 
     # 2. 주소가 입력된 경우에만 시설유형 선택 UI 표시
-    if address:
-        facility_types = df['시설유형'].dropna().unique()
-        selected_type = st.selectbox('시설유형을 선택하세요', facility_types)
+
+    facility_types = df['시설유형'].dropna().unique()
+    selected_type = st.selectbox('시설유형을 선택하세요', facility_types)
     
 
     # 주소가 비어 있으면 None 반환 (app_map에서 체크)
-        if not address:
-            st.info('주소를 입력하면 해당 위치를 찾아 추천을 제공합니다.')
-            return None 
-
-    # 지오코딩 실패 시 None 반환
-    if lat is None or lon is None:
-        st.error("주소를 찾을 수 없습니다.")
-        return None
+    if not address:
+        st.info('주소를 입력하면 해당 위치를 찾아 추천을 제공합니다.')
+        return None 
         
 
-    lis = [lat, lon, address, selected_type]  # 위도, 경도, 주소, 선택한 시설유형
     if st.button('입력'):
+        lat, lon = get_lat_lon_kakao(address)
+        
+            # 지오코딩 실패 시 None 반환
+        if lat is None or lon is None:
+            st.error("주소를 찾을 수 없습니다.")
+            return None
+        lis = [lat, lon, address, selected_type]  # 위도, 경도, 주소, 선택한 시설유형
         st.session_state['user_location'] = lis
         return lis
     return None
