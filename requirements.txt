@@ -25,6 +25,7 @@ genai
 PyPDF2
 pypdf
 chromadb
+pysqlite3-binary
 langchain-core
 langchain-community
 langchain-google-genai
