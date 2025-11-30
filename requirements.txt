@@ -1,33 +1,5 @@
---no-warn-script-location
---disable-pip-version-check
-
-# Streamlit & UI
-streamlit==1.51.0
-streamlit-aggrid==1.2.0.post1
-streamlit-option-menu==0.4.0
-
-# 데이터 처리 & 지도
-pandas==2.3.3
-numpy==1.26.4
-folium==0.20.0
-geopy==2.4.1
-matplotlib==3.10.7
-scikit-learn==1.7.2
-requests==2.32.5
-
-# 지리/라우팅 (무거움)
+streamlit
+pandas
+folium
 osmnx==1.9.6
-networkx==3.4.2
-
-# Google / 생성형 AI
-google-generativeai==0.8.5
-google-genai==1.47.0
-genai==2.1.0
-
-# PDF 및 RAG
-PyPDF2==3.0.1
-pypdf==6.1.3
-chromadb==1.0.20
-langchain-core==0.3.79
-langchain-community==0.3.31
-langchain-google-genai==2.0.10
+chromadb
